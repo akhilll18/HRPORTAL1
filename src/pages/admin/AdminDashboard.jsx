@@ -25,7 +25,7 @@ export default function AdminDashboard() {
   const byType = Object.keys(REQUEST_TYPES).map((t) => ({ t, n: waiting.filter((w) => w.type === t).length })).filter((x) => user.modules.includes(REQUEST_TYPES[x.t].module));
   const maxType = Math.max(1, ...byType.map((x) => x.n));
   const recent = data.audit.filter((a) => a.user_code === user.admin_code && /APPROVE|REJECT|PAID|DISBURSED|ACCOUNT_/.test(a.action)).slice(0, 6);
-
+  // console.log({ waiting, overdue, byType, maxType, recent, claimedMonth, onLeave });
   return (
     <>
       <PageHeader eyebrow={`${user.admin_code} · ${user.modules.map((m) => REQUEST_TYPES[m]?.label || "Accounts").join(" · ")}`} title={`Hello, ${user.full_name.split(" ")[0]}`} subtitle={`Final approver for ${[...scope].length} org unit(s). Managers approve first; you decide after them.`} actions={<Button variant="contained" endIcon={<ArrowForwardRounded />} onClick={() => navigate("/approvals")}>All approvals</Button>} />
