@@ -108,9 +108,44 @@ export function scopeData(data, locIds) {
     return true;
   };
   const out = { ...data, scoped: { locations: locIds, companies: companyIds, employees: empCodes } };
+
+  // Collections that point at people, sites or countries under other field names. A row with no link at all
+  // (an unassigned laptop with no site, an offer typed in by hand) stays visible everywhere.
+  const geoLoc = new Map((data.workLocations || []).filter((l) => l.geofence_id).map((l) => [l.geofence_id, l.location_id]));
+  const atSite = (gf) => (geoLoc.has(gf) ? locIds.has(geoLoc.get(gf)) : null);
+  const person = (code) => (code && EMP_KEY.test(code) ? empCodes.has(code) : null);
+  const inCountry = (c) => (c ? countries.has(c) : null);
+  const first = (...xs) => xs.find((x) => x !== null && x !== undefined) ?? true;
+  const reqIds = new Set((data.reqs || []).filter((r) => first(r.location_id ? locIds.has(r.location_id) : null, person(r.hiring_manager))).map((r) => r.id));
+  const knownReq = new Set((data.reqs || []).map((r) => r.id));
+  const candIds = new Set((data.candidates || []).filter((c) => !knownReq.has(c.req_id) || reqIds.has(c.req_id)).map((c) => c.id));
+  const knownCand = new Set((data.candidates || []).map((c) => c.id));
+  const viaCandidate = (row) => (row.candidate_id && knownCand.has(row.candidate_id) && !row.employee_code ? candIds.has(row.candidate_id) : null);
+  const RULES = {
+    assets: (a) => first(person(a.assigned_to), atSite(a.location)),
+    devices: (x) => first(atSite(x.geofence_id)),
+    itTickets: (t) => first(person(t.requester)),
+    reqs: (r) => reqIds.has(r.id),
+    candidates: (c) => candIds.has(c.id),
+    interviews: (x) => first(viaCandidate(x)),
+    atsNotes: (x) => first(viaCandidate(x)),
+    offers: (x) => first(viaCandidate(x)),
+    succession: (s) => first(person(s.incumbent)),
+    feedback: (f) => {
+      const a = person(f.from), b = person(f.to);
+      return a === null && b === null ? true : Boolean(a || b);
+    },
+    clients: (c) => first(person(c.owner)),
+    events: (e) => first(person(e.owner)),
+    meetings: (m) => first(person(m.organizer)),
+    complianceItems: (c) => first(inCountry(c.country)),
+    exits: (x) => first(inCountry(x.ctry || x.country)),
+  };
+
   for (const [k, v] of Object.entries(data)) {
     if (KEEP.has(k)) continue;
-    if (k === "employees") out.employees = v.filter((e) => empCodes.has(e.employee_code));
+    if (RULES[k] && Array.isArray(v)) out[k] = v.filter((row) => (row && typeof row === "object" ? (row.employee_code ? empCodes.has(row.employee_code) : RULES[k](row)) : true));
+    else if (k === "employees") out.employees = v.filter((e) => empCodes.has(e.employee_code));
     else if (k === "geofences") out.geofences = v.filter((g) => countries.has(g.country));
     else if (Array.isArray(v)) out[k] = v.some((x) => x && typeof x === "object" && ("employee_code" in x || "location_id" in x || "company_id" in x)) ? v.filter(keepRow) : v;
     else if (v && typeof v === "object" && Object.keys(v).some((x) => EMP_KEY.test(x))) out[k] = Object.fromEntries(Object.entries(v).filter(([x]) => !EMP_KEY.test(x) || empCodes.has(x)));

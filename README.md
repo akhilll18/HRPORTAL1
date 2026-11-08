@@ -9,6 +9,11 @@ warehouse; ONAS UK & Europe; Americas; Middle East; Africa; Asia Pacific). Admin
 the *whole application*: the store hands every page a scoped copy of the data (employees, every record that carries an
 `employee_code`, maps keyed by employee code, geofences, and records stamped with a company / location), so people, approvals,
 attendance, live location, payroll, payslips, contracts, expenses, analytics and reports all follow it without page changes.
+Records that point at people or sites under other fields follow it too: assets (holder, else site), biometric devices (site),
+IT tickets (requester), job openings (location, else hiring manager) with their candidates, interviews, notes and offers,
+succession plans (incumbent), feedback (giver or receiver), clients, events and meetings (owner / organiser), and
+compliance items and exits (country). A record with no such link — an unassigned item with no site, a hand-typed offer —
+stays visible in every scope.
 Actions still work on the full data. **Companies & locations** (`/companies`) lists entities and locations with headcount
 and payroll, lets the Super Admin add or edit them, lets HR move staff between locations (the company follows the location),
 and has **Admin access**: limit an admin to some companies or locations, after which they see only those and the header picker
