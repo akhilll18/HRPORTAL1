@@ -6,7 +6,7 @@ import { useStore } from "../store/AppStore.jsx";
 import { PageHeader, SectionCard, EmptyState } from "../components/kit/UI.jsx";
 import { fmtDateTime, timeAgo } from "../lib/utils.js";
 
-export default function NotificationsPage() {
+export default function NotificationsPage({ embedded = false }) {
   const { data, user, markRead, markAllRead } = useStore();
   const navigate = useNavigate();
   const [filter, setFilter] = useState("all");
@@ -14,7 +14,7 @@ export default function NotificationsPage() {
   const list = filter === "unread" ? mine.filter((n) => !n.read) : mine;
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title="Notifications"
         subtitle="Every change to your claims, accounts and approvals is posted here."
         actions={
@@ -22,14 +22,17 @@ export default function NotificationsPage() {
             Mark all read
           </Button>
         }
-      />
+      />}
       <SectionCard
         title={`${mine.filter((n) => !n.read).length} unread`}
         action={
-          <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)}>
-            <ToggleButton value="all">All</ToggleButton>
-            <ToggleButton value="unread">Unread</ToggleButton>
-          </ToggleButtonGroup>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+            {embedded && <Button size="small" variant="outlined" onClick={markAllRead} disabled={!mine.some((n) => !n.read)}>Mark all read</Button>}
+            <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)}>
+              <ToggleButton value="all">All</ToggleButton>
+              <ToggleButton value="unread">Unread</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
         }
         noPad
       >

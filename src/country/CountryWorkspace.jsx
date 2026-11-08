@@ -70,7 +70,7 @@ function useCountryData(cc) {
 // ─────────────────────────── global / region overview ───────────────────────────
 function CountryCard({ c, onPick }) {
   return (
-    <Box onClick={() => onPick(c.cc)} sx={{ cursor: "pointer", p: 2, borderRadius: 2, border: `1px solid ${ONAS.line}`, background: "#fff", transition: "all .15s", "&:hover": { borderColor: ONAS.teal, boxShadow: "0 6px 20px rgba(18,69,84,0.10)", transform: "translateY(-1px)" } }}>
+    <Box onClick={() => onPick(c.cc)} sx={{ cursor: "pointer", p: 2, borderRadius: 2, border: `1px solid ${ONAS.line}`, background: "#fff", transition: "all .15s", "&:hover": { borderColor: ONAS.teal, boxShadow: "0 6px 20px rgba(0,74,119,0.10)", transform: "translateY(-1px)" } }}>
       <Stack direction="row" spacing={1.2} sx={{ alignItems: "center" }}>
         <Box sx={{ fontSize: "1.6rem" }}>{c.p.flag}</Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -174,7 +174,7 @@ function Calculator({ cc, initial }) {
   }
   const L = ({ list }) => list.filter(([, v]) => v !== 0).map(([k, v]) => (
     <Stack key={k} direction="row" sx={{ justifyContent: "space-between", py: 0.35, borderBottom: `1px dashed ${ONAS.line}` }}>
-      <Typography sx={{ fontSize: "0.66rem", color: "#4b5d63" }}>{k}</Typography>
+      <Typography sx={{ fontSize: "0.66rem", color: "#4a5f6d" }}>{k}</Typography>
       <Typography sx={{ fontSize: "0.66rem", fontFamily: "monospace" }}>{typeof v === "number" ? fmtMoney(v, cc) : v}</Typography>
     </Stack>
   ));

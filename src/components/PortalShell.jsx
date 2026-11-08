@@ -81,12 +81,14 @@ import {
   Assignment as AssignmentIcon,
   PendingActions as PendingActionsIcon,
 } from "@mui/icons-material";
-const Icons = { Home: HomeIcon, Inbox: InboxIcon, Notifications: NotificationsIcon, AccessTime: AccessTimeIcon, EventAvailable: EventAvailableIcon, Receipt: ReceiptIcon, Stars: StarsIcon, AccountBalanceWallet: AccountBalanceWalletIcon, Person: PersonIcon, Groups: GroupsIcon, Badge: BadgeIcon, AccountTree: AccountTreeIcon, Folder: FolderIcon, School: SchoolIcon, Support: SupportIcon, Dashboard: DashboardIcon, FactCheck: FactCheckIcon, Insights: InsightsIcon, ListAlt: ListAltIcon, AdminPanelSettings: AdminPanelSettingsIcon, Rule: RuleIcon, History: HistoryIcon, Settings: SettingsIcon, Circle: CircleIcon, Fingerprint: FingerprintIcon, PhoneInTalk: PhoneInTalkIcon, Flag: FlagIcon, HealthAndSafety: HealthAndSafetyIcon, Inventory: InventoryIcon, Checklist: ChecklistIcon, Place: PlaceIcon, RateReview: RateReviewIcon, Work: WorkIcon, AutoGraph: AutoGraphIcon, VideoLibrary: VideoLibraryIcon, Monitor: MonitorIcon, Payments: PaymentsIcon, Spa: SpaIcon, Radar: RadarIcon, Shield: ShieldIcon, Public: PublicIcon, Gavel: GavelIcon, ReceiptLong: ReceiptLongIcon, HistoryEdu: HistoryEduIcon, Forum: ForumIcon, CalendarMonth: CalendarMonthIcon, Handshake: HandshakeIcon, VerifiedUser: VerifiedUserIcon, EventNote: EventNoteIcon, SupportAgent: SupportAgentIcon, Computer: ComputerIcon, Assignment: AssignmentIcon, PendingActions: PendingActionsIcon };
+const Icons = { Home: HomeIcon, Inbox: InboxIcon, Notifications: NotificationsIcon, AccessTime: AccessTimeIcon, EventAvailable: EventAvailableIcon, Receipt: ReceiptIcon, Stars: StarsIcon, AccountBalanceWallet: AccountBalanceWalletIcon, Person: PersonIcon, Groups: GroupsIcon, Badge: BadgeIcon, AccountTree: AccountTreeIcon, Folder: FolderIcon, School: SchoolIcon, Support: SupportIcon, Dashboard: DashboardIcon, FactCheck: FactCheckIcon, Insights: InsightsIcon, ListAlt: ListAltIcon, AdminPanelSettings: AdminPanelSettingsIcon, Rule: RuleIcon, History: HistoryIcon, Settings: SettingsIcon, Circle: CircleIcon, Fingerprint: FingerprintIcon, PhoneInTalk: PhoneInTalkIcon, Flag: FlagIcon, HealthAndSafety: HealthAndSafetyIcon, Inventory: InventoryIcon, Checklist: ChecklistIcon, Place: PlaceIcon, RateReview: RateReviewIcon, Work: WorkIcon, AutoGraph: AutoGraphIcon, VideoLibrary: VideoLibraryIcon, Monitor: MonitorIcon, Payments: PaymentsIcon, Spa: SpaIcon, Radar: RadarIcon, Shield: ShieldIcon, Public: PublicIcon, Gavel: GavelIcon, ReceiptLong: ReceiptLongIcon, HistoryEdu: HistoryEduIcon, Forum: ForumIcon, CalendarMonth: CalendarMonthIcon, Handshake: HandshakeIcon, VerifiedUser: VerifiedUserIcon, EventNote: EventNoteIcon, SupportAgent: SupportAgentIcon, Computer: ComputerIcon, Assignment: AssignmentIcon, PendingActions: PendingActionsIcon, PhoneIphone: PhoneIphoneIcon, EmojiEvents: EmojiEventsIcon, Schedule: ScheduleIcon, CreditCard: CreditCardIcon, PrivacyTip: PrivacyTipIcon, FlightTakeoff: FlightTakeoffIcon, ExitToApp: ExitToAppIcon, QueryStats: QueryStatsIcon, Policy: PolicyIcon, Tune: TuneIcon, SmartToy: SmartToyIcon, Hub: HubIcon, TaskAlt: TaskAltIcon, RocketLaunch: RocketLaunchIcon, Lock: LockIcon };
 import { Notifications as Bell, Logout as LogOut, Menu, Search, Close as X, TimerOutlined, Key } from "@mui/icons-material";
+import { PhoneIphone as PhoneIphoneIcon, EmojiEvents as EmojiEventsIcon, Schedule as ScheduleIcon, CreditCard as CreditCardIcon, PrivacyTip as PrivacyTipIcon, FlightTakeoff as FlightTakeoffIcon, ExitToApp as ExitToAppIcon, QueryStats as QueryStatsIcon, Policy as PolicyIcon, Tune as TuneIcon, SmartToy as SmartToyIcon, Hub as HubIcon, TaskAlt as TaskAltIcon, RocketLaunch as RocketLaunchIcon, Lock as LockIcon } from "@mui/icons-material";
 import { theme } from "../theme.js";
 import { Avatar } from "./PortalUI.jsx";
 import { meshBackground } from "./glass/Glass.jsx";
 import { useStore, ROLE_LABEL } from "../store/AppStore.jsx";
+import { inboxCount } from "../pages/inbox/InboxHub.jsx";
 import { navFor } from "../data/roleNav.js";
 import { timeAgo } from "../lib/utils.js";
 import { IT_OPEN, slaState } from "../lib/itdesk.js";
@@ -188,6 +190,7 @@ export default function PortalShell({ page, onNavigate, onSearch, children, stag
   const unread = mine.filter((n) => !n.read).length;
   const badgeValue = (key) => {
     if (key === "unread") return unread;
+    if (key === "inbox-all") return unread + inboxCount(data, user, { pendingForManager, pendingForAdmin });
     if (key === "inbox" && user.role === "emp") {
       const p = pendingForManager(user.employee_code);
       return p.requests.length + p.points.length;

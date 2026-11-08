@@ -18,6 +18,7 @@ import OrganizationPage from "./pages/OrganizationPage.jsx";
 
 // Employee (Keka / PeopleHR modules)
 import InboxPage from "./pages/inbox/InboxPage.jsx";
+import InboxHub from "./pages/inbox/InboxHub.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import LeavePage from "./pages/LeavePage.jsx";
 import ExpensesPage from "./pages/ExpensesPage.jsx";
@@ -70,6 +71,17 @@ import { bgvStatus, canSeeBgvColumn } from "./lib/collab.js";
 // v8.7: contract management
 import ContractsHub from "./components/contracts/ContractViews.jsx";
 import MyContractPage, { TeamTimesheetsPage } from "./components/contracts/MyContract.jsx";
+// v10: all-in-one suite — Payroll Agent, compliance autopilot, exits & F&F, shifts, leave rule-sets, PeopleXP,
+// global hiring, relocation, spend cards, integrations, insights, setup, billing, security, expert support, coverage.
+import PayrollAgent from "./pages/suite/PayrollAgent.jsx";
+import ComplianceAutopilot, { MyPrivacy } from "./pages/suite/ComplianceAutopilot.jsx";
+import Exits, { MyExit } from "./pages/suite/Exits.jsx";
+import { LiveBoard, Shifts, MyShifts } from "./pages/suite/Workforce.jsx";
+import LeaveRules from "./pages/suite/LeaveRules.jsx";
+import PeopleXP, { MyApp } from "./pages/suite/PeopleXP.jsx";
+import { GlobalHiring, Relocation, MyRelocation, SpendCards, MyCard } from "./pages/suite/GlobalTeams.jsx";
+import { Integrations, Insights, SetupImport, Billing, Security, ExpertSupport } from "./pages/suite/Platform.jsx";
+import Coverage from "./pages/suite/Coverage.jsx";
 
 function ContractsPageWrap() {
   const { user } = useStore();
@@ -261,7 +273,8 @@ export default function PeopleHubApp() {
     ),
     learning: <LearningHub libraryProps={{ videos: trainingVideos, canUpload: user.role !== "emp", onUpload: uploadTrainingVideo, onDelete: (id) => (user.role === "emp" ? notifyToast("Only admins can remove library items.", "info") : setTrainingVideos((c) => c.filter((v) => v.id !== id))) }} />,
     support: <SupportPage tickets={user.role === "emp" ? supportTickets.filter((t) => !t.by || t.by === user.code) : supportTickets} onAction={(type) => setDialog({ type })} onItSupport={() => go("/it-support")} />,
-    notifications: <NotificationsPage />,
+    notifications: <InboxHub tab="notifications" />,
+    inbox: <InboxHub tab="inbox" />,
     country: <CountryWorkspace />,
     chat: <ChatPage />,
     calendar: <CalendarPage />,
@@ -272,6 +285,33 @@ export default function PeopleHubApp() {
     "it-support": <ItSupportPage />,
     "it-helpdesk": <ItHelpdeskPage />,
     contracts: <ContractsPageWrap />,
+    // v10 suite (role access is decided by the sidebar; actions are guarded in the store)
+    "people-xp": <PeopleXP />,
+    "payroll-agent": <PayrollAgent tab="run" />,
+    "variable-pay": <PayrollAgent tab="variable" />,
+    payouts: <PayrollAgent tab="payouts" />,
+    filings: <PayrollAgent tab="filings" />,
+    "global-payroll": <PayrollAgent tab="global" />,
+    "compliance-autopilot": <ComplianceAutopilot tab="health" />,
+    "compliance-alerts": <ComplianceAutopilot tab="alerts" />,
+    "rule-updates": <ComplianceAutopilot tab="rules" />,
+    "audit-pack": <ComplianceAutopilot tab="audit" />,
+    "privacy-center": <ComplianceAutopilot tab="privacy" />,
+    exits: <Exits />,
+    "live-board": <LiveBoard />,
+    shifts: <Shifts tab="shifts" />,
+    timesheets: <Shifts tab="timesheets" />,
+    "leave-rules": <LeaveRules />,
+    "global-hiring": <GlobalHiring />,
+    relocation: <Relocation />,
+    "spend-cards": <SpendCards />,
+    integrations: <Integrations />,
+    insights: <Insights />,
+    setup: <SetupImport />,
+    billing: <Billing />,
+    security: <Security />,
+    "expert-support": <ExpertSupport />,
+    coverage: <Coverage />,
   };
 
   const byRole = {
@@ -289,7 +329,7 @@ export default function PeopleHubApp() {
           attendanceRecords={attendanceRecords}
         />} />
       ),
-      inbox: <InboxPage />,
+
       attendance: <MyAttendance />,
       "my-activity": <MyActivity />,
       assets: <AssetsAndIt />,
@@ -316,6 +356,12 @@ export default function PeopleHubApp() {
       team: <MyTeamPage />,
       "my-contract": <MyContractPage />,
       "team-timesheets": <TeamTimesheetsPage />,
+      "my-app": <MyApp />,
+      "my-shifts": <MyShifts />,
+      "my-card": <MyCard />,
+      "my-privacy": <MyPrivacy />,
+      "my-relocation": <MyRelocation />,
+      "my-exit": <MyExit />,
     },
     admin: {
       admin: <OpsGlassHome view={homeView} onView={setHomeView} classic={<AdminDashboard />} />,

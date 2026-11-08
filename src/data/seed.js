@@ -5,6 +5,7 @@ import { DEFAULT_COMPANY } from "./payslipFields.js";
 import { buildOps } from "./seedOps.js";
 import { buildCollabSeed } from "./seedCollab.js";
 import { buildPayrollSuiteSeed } from "./seedPayrollSuite.js";
+import { buildSuiteSeed } from "./seedSuite.js";
 import { buildContractSeed } from "./seedContracts.js";
 import { buildPayslipDesignSeed } from "./payslipDesign.js";
 import { buildPayslipSeed, buildOfferSeed } from "./seedPayslips.js";
@@ -548,5 +549,6 @@ export function buildSeed() {
     ...buildPayrollSuiteSeed(employees),
     ...buildContractSeed(employees),
     ...buildPayslipDesignSeed(),
+    ...buildSuiteSeed(employees),
   };
 }

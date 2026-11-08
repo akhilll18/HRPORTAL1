@@ -12,6 +12,7 @@ import { makeCollabActions } from "./collabActions.js";
 import { makeItActions } from "./itActions.js";
 import { makeDocActions } from "./docActions.js";
 import { makePayrollSuiteActions } from "./payrollSuiteActions.js";
+import { makeSuiteActions } from "./suiteActions.js";
 import { makeContractActions } from "./contractActions.js";
 import { makePayslipDesignActions } from "./payslipDesignActions.js";
 import { CONTRACT_COMPONENT_CODES } from "../data/payslipFields.js";
@@ -1146,6 +1147,7 @@ export function AppStoreProvider({ children }) {
   const itOps = useMemo(() => makeItActions({ mutate, dataRef, sessionRef, pushAudit, pushNote }), [mutate]);
   const collabOps = useMemo(() => makeCollabActions({ mutate, dataRef, sessionRef, pushAudit, pushNote }), [mutate]);
   const payrollSuiteOps = useMemo(() => makePayrollSuiteActions({ mutate, dataRef, sessionRef, pushAudit, pushNote }), [mutate]);
+  const suiteOps = useMemo(() => makeSuiteActions({ mutate, dataRef, sessionRef, pushAudit, pushNote }), [mutate]);
   const contractOps = useMemo(() => makeContractActions({ mutate, dataRef, sessionRef, pushAudit, pushNote }), [mutate]);
   const designOps = useMemo(() => makePayslipDesignActions({ mutate, dataRef, sessionRef, pushAudit, pushNote }), [mutate]);
 
@@ -1157,6 +1159,7 @@ export function AppStoreProvider({ children }) {
     ...itOps,
     ...docOps,
     ...payrollSuiteOps,
+    ...suiteOps,
     ...contractOps,
     ...designOps,
     data, session, user, pending, toast, setToast, notifyToast, logoutReason, rememberedLogin, fingerprint: fp, device, ...helpers,

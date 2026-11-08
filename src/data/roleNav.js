@@ -7,20 +7,22 @@ export const ROLE_NAV = {
   emp: [
     { group: "SELF-SERVICE", items: [
       { id: "home", label: "Home", icon: "Home" },
-      { id: "inbox", label: "Inbox", icon: "Inbox", badge: "inbox" },
-      { id: "notifications", label: "Notifications", icon: "Notifications", badge: "unread" },
+      { id: "inbox", label: "Inbox & notifications", icon: "Inbox", badge: "inbox-all", alias: ["notifications"] },
       { id: "profile", label: "My profile", icon: "Person" },
       { id: "my-contract", label: "My contract", icon: "Assignment", badge: "contract-me", when: ({ me }) => isContingent(me) },
       { id: "country", label: "Country space", icon: "Public" },
+      { id: "my-app", label: "Mobile app", icon: "PhoneIphone" },
     ] },
     { group: "COLLABORATE", items: [
       { id: "chat", label: "Chat", icon: "Forum", badge: "chat" },
       { id: "calendar", label: "Calendar", icon: "CalendarMonth" },
       { id: "meetings", label: "Client meetings", icon: "Handshake" },
+      { id: "people-xp", label: "PeopleXP · recognition", icon: "EmojiEvents" },
     ] },
     { group: "TIME & ATTENDANCE", items: [
       { id: "attendance", label: "Attendance", icon: "Fingerprint" },
       { id: "leave", label: "Leave", icon: "EventAvailable" },
+      { id: "my-shifts", label: "My shifts & timesheet", icon: "Schedule" },
       { id: "calls", label: "My calls", icon: "PhoneInTalk", when: ({ me }) => me?.call_tracking === "yes" },
       { id: "my-activity", label: "My activity & privacy", icon: "Insights" },
       { id: "team-timesheets", label: "Contractor timesheets", icon: "PendingActions", badge: "ts-approve", when: ({ data, me }) => (data.contracts || []).some((c) => ["active", "suspended", "pending_approval"].includes(c.status) && (c.timesheet_approver || data.employees.find((e) => e.employee_code === c.employee_code)?.reporting_manager) === me?.employee_code) },
@@ -33,6 +35,7 @@ export const ROLE_NAV = {
       { id: "finances", label: "My pay & payslips", icon: "AccountBalanceWallet" },
       { id: "expenses", label: "Expenses & travel", icon: "Receipt" },
       { id: "benefits-me", label: "Benefits & wellness", icon: "HealthAndSafety" },
+      { id: "my-card", label: "My spend card", icon: "CreditCard", when: ({ data, me }) => (data.suite?.cards || []).some((c) => c.employee_code === me?.employee_code) },
     ] },
     { group: "CORE HR", items: [
       { id: "assets", label: "My assets & IT support", icon: "Inventory", badge: "it-me", alias: ["it-support"] },
@@ -42,6 +45,9 @@ export const ROLE_NAV = {
       { id: "people", label: "People", icon: "Badge" },
       { id: "organization", label: "Org chart", icon: "AccountTree" },
       { id: "support", label: "HR support", icon: "Support" },
+      { id: "my-privacy", label: "Privacy & my data", icon: "PrivacyTip" },
+      { id: "my-relocation", label: "Relocation & visa", icon: "FlightTakeoff" },
+      { id: "my-exit", label: "Resignation & exit", icon: "ExitToApp" },
     ] },
     { group: "MY TEAM", managerOnly: true, items: [
       { id: "team", label: "Team summary", icon: "Groups" },
@@ -55,17 +61,21 @@ export const ROLE_NAV = {
   admin: [
     { group: "ADMIN", items: [
       { id: "admin", label: "Dashboard", icon: "Dashboard" },
+      { id: "inbox", label: "Inbox & notifications", icon: "Inbox", badge: "inbox-all", alias: ["notifications"] },
       { id: "approvals", label: "All approvals", icon: "FactCheck", badge: "admin" },
       { id: "country", label: "Country space", icon: "Public" },
       { id: "reports", label: "Reports", icon: "Insights" },
+      { id: "insights", label: "Workforce intelligence", icon: "QueryStats" },
     ] },
     { group: "COLLABORATE", items: [
       { id: "chat", label: "Chat", icon: "Forum", badge: "chat" },
       { id: "calendar", label: "Calendar", icon: "CalendarMonth" },
       { id: "meetings", label: "Meetings", icon: "Handshake" },
+      { id: "people-xp", label: "PeopleXP · recognition", icon: "EmojiEvents" },
     ] },
     { group: "CORE HR", items: [
       { id: "people", label: "Employee database", icon: "Badge" },
+      { id: "exits", label: "Exits & F&F settlement", icon: "ExitToApp", modules: ["accounts", "payroll", "onboarding", "leave"] },
       { id: "contracts", label: "Contract management", icon: "Assignment", badge: "contracts", modules: ["contracts", "payroll"] },
       { id: "organization", label: "Org chart", icon: "AccountTree" },
       { id: "assets-admin", label: "Assets", icon: "Inventory", module: "assets" },
@@ -77,8 +87,11 @@ export const ROLE_NAV = {
       { id: "offers", label: "Offer letters", icon: "HistoryEdu", module: "offers" },
       { id: "bgv", label: "Background verification", icon: "VerifiedUser", badge: "bgv", when: ({ data, user }) => user?.modules?.includes("bgv") || (data.bgvAccess || []).some((g) => g.code === user?.code && !g.revoked) },
       { id: "onboarding", label: "Onboarding", icon: "Checklist", module: "onboarding" },
+      { id: "global-hiring", label: "Global hiring · EOR & CoR", icon: "Public", modules: ["contracts", "payroll", "recruitment"] },
+      { id: "relocation", label: "Relocation & visas", icon: "FlightTakeoff", modules: ["onboarding", "accounts"] },
     ] },
     { group: "COMPLIANCE", items: [
+      { id: "compliance-autopilot", label: "Compliance autopilot", icon: "Policy", modules: ["compliance", "payroll"], alias: ["compliance-alerts", "rule-updates", "audit-pack", "privacy-center"] },
       { id: "compliance-calendar", label: "Compliance calendar", icon: "EventNote", badge: "compliance", modules: ["compliance", "payroll"] },
     ] },
     { group: "TALENT", items: [
@@ -90,38 +103,52 @@ export const ROLE_NAV = {
     ] },
     { group: "TIME & WORKFORCE", items: [
       { id: "workforce", label: "Workforce management", icon: "Groups", module: "workforce" },
+      { id: "live-board", label: "Live board, shifts & timesheets", icon: "Schedule", modules: ["attendance", "workforce", "payroll"], alias: ["shifts", "timesheets"] },
       { id: "attendance-admin", label: "Time & attendance", icon: "Fingerprint", module: "attendance" },
+      { id: "leave-rules", label: "Leave rule-sets", icon: "Tune", module: "leave" },
       { id: "live-map", label: "Geofencing & live location", icon: "Place", module: "location" },
       { id: "calls-admin", label: "Team call tracker", icon: "PhoneInTalk", module: "calls" },
       { id: "monitoring", label: "Employee monitoring", icon: "Monitor", module: "monitoring" },
     ] },
     { group: "PAY & BENEFITS", items: [
+      { id: "payroll-agent", label: "Payroll Agent", icon: "SmartToy", module: "payroll", alias: ["variable-pay", "payouts", "filings", "global-payroll"] },
       { id: "payroll", label: "Payroll", icon: "Payments", module: "payroll" },
       { id: "payslips", label: "Payslips", icon: "ReceiptLong", modules: ["payslips", "payroll"], badge: "payslips" },
+      { id: "spend-cards", label: "Spend cards", icon: "CreditCard", modules: ["expense", "payroll"] },
       { id: "benefits-admin", label: "Benefits administration", icon: "HealthAndSafety", module: "benefits" },
       { id: "wellness", label: "Employee wellness", icon: "Spa", module: "wellness" },
+    ] },
+    { group: "PLATFORM", items: [
+      { id: "integrations", label: "Integrations & API", icon: "Hub", modules: ["payroll", "expense"] },
+      { id: "expert-support", label: "Expert support", icon: "SupportAgent" },
     ] },
     { group: "ACCOUNT", items: [
       { id: "support", label: "HR support", icon: "Support" },
       { id: "it-support", label: "IT support", icon: "SupportAgent", badge: "it-me" },
-      { id: "notifications", label: "Notifications", icon: "Notifications", badge: "unread" },
       { id: "profile", label: "My profile", icon: "Person" },
     ] },
   ],
   superadmin: [
     { group: "CONTROL", items: [
       { id: "super", label: "Dashboard", icon: "Dashboard" },
+      { id: "inbox", label: "Inbox & notifications", icon: "Inbox", badge: "inbox-all", alias: ["notifications"] },
       { id: "users", label: "Users & access", icon: "AdminPanelSettings", badge: "locked" },
       { id: "policies", label: "Policies & rules", icon: "Rule" },
       { id: "settings", label: "System settings", icon: "Settings" },
+      { id: "coverage", label: "Feature coverage", icon: "TaskAlt" },
+      { id: "setup", label: "Setup & data import", icon: "RocketLaunch" },
+      { id: "security", label: "Security & backups", icon: "Lock" },
+      { id: "billing", label: "Plan & billing", icon: "Receipt" },
     ] },
     { group: "COLLABORATE", items: [
       { id: "chat", label: "Chat", icon: "Forum", badge: "chat" },
       { id: "calendar", label: "Calendar", icon: "CalendarMonth" },
       { id: "meetings", label: "Meetings", icon: "Handshake" },
+      { id: "people-xp", label: "PeopleXP · recognition", icon: "EmojiEvents" },
     ] },
     { group: "CORE HR", items: [
       { id: "employees", label: "Employee database", icon: "Badge" },
+      { id: "exits", label: "Exits & F&F settlement", icon: "ExitToApp" },
       { id: "contracts", label: "Contract management", icon: "Assignment", badge: "contracts" },
       { id: "fields", label: "Field reference", icon: "ListAlt" },
       { id: "organization", label: "Org chart", icon: "AccountTree" },
@@ -142,7 +169,9 @@ export const ROLE_NAV = {
     ] },
     { group: "TIME & WORKFORCE", items: [
       { id: "workforce", label: "Workforce management", icon: "Groups" },
+      { id: "live-board", label: "Live board, shifts & timesheets", icon: "Schedule", alias: ["shifts", "timesheets"] },
       { id: "attendance-admin", label: "Time & attendance", icon: "Fingerprint" },
+      { id: "leave-rules", label: "Leave rule-sets", icon: "Tune" },
       { id: "geofences", label: "Geofences & devices", icon: "Radar" },
       { id: "live-map", label: "Live location", icon: "Place" },
       { id: "calls-admin", label: "Team call tracker", icon: "PhoneInTalk" },
@@ -150,24 +179,33 @@ export const ROLE_NAV = {
       { id: "monitoring-policy", label: "Monitoring policy", icon: "Shield" },
     ] },
     { group: "PAY & BENEFITS", items: [
+      { id: "payroll-agent", label: "Payroll Agent", icon: "SmartToy", alias: ["variable-pay", "payouts", "filings", "global-payroll"] },
       { id: "payroll", label: "Payroll", icon: "Payments" },
       { id: "payslips", label: "Payslips", icon: "ReceiptLong", badge: "payslips" },
+      { id: "spend-cards", label: "Spend cards", icon: "CreditCard" },
       { id: "benefits-admin", label: "Benefits & wellness", icon: "HealthAndSafety" },
     ] },
     { group: "GLOBAL", items: [
       { id: "country", label: "Country space", icon: "Public" },
       { id: "territory", label: "Multi-territory workforce", icon: "Public" },
+      { id: "global-hiring", label: "Global hiring · EOR & CoR", icon: "Public" },
+      { id: "relocation", label: "Relocation & visas", icon: "FlightTakeoff" },
+      { id: "compliance-autopilot", label: "Compliance autopilot", icon: "Policy", alias: ["compliance-alerts", "rule-updates", "audit-pack", "privacy-center"] },
       { id: "compliance-calendar", label: "Compliance calendar", icon: "EventNote", badge: "compliance" },
       { id: "compliance", label: "Local policies & compliance", icon: "Gavel" },
     ] },
     { group: "INSIGHT", items: [
+      { id: "insights", label: "Workforce intelligence", icon: "QueryStats" },
       { id: "analytics", label: "HR analytics", icon: "AutoGraph" },
       { id: "reports", label: "Reports", icon: "Insights" },
+    ] },
+    { group: "PLATFORM", items: [
+      { id: "integrations", label: "Integrations & API", icon: "Hub" },
+      { id: "expert-support", label: "Expert support", icon: "SupportAgent" },
     ] },
     { group: "OVERSIGHT", items: [
       { id: "requests", label: "All requests", icon: "FactCheck", badge: "escalated" },
       { id: "audit", label: "Audit log", icon: "History" },
-      { id: "notifications", label: "Notifications", icon: "Notifications", badge: "unread" },
     ] },
   ],
 };
