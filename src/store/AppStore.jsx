@@ -16,6 +16,7 @@ import { makeSuiteActions } from "./suiteActions.js";
 import { makeContractActions } from "./contractActions.js";
 import { makePayslipDesignActions } from "./payslipDesignActions.js";
 import { makeEntityActions } from "./entityActions.js";
+import { enrichBgvCase } from "../data/seedBgvTracking.js";
 import { ALL, allowedEntities, scopeData, scopeLocationIds, defaultEntityFor } from "../data/entities.js";
 import { CONTRACT_COMPONENT_CODES } from "../data/payslipFields.js";
 import { isoDate } from "../lib/utils.js";
@@ -36,7 +37,7 @@ function loadData() {
       // Fill any collections added since this browser saved its copy.
       if (parsed?.version === 3) {
         const fresh = clone(buildSeed());
-        return migrateV101(migrateV88b(migrateV88(migrateV87(migrateV8(withCountryData({ ...fresh, ...parsed, settings: { ...fresh.settings, ...parsed.settings } }, fresh)), fresh))), parsed);
+        return migrateBgvTrack(migrateV101(migrateV88b(migrateV88(migrateV87(migrateV8(withCountryData({ ...fresh, ...parsed, settings: { ...fresh.settings, ...parsed.settings } }, fresh)), fresh))), parsed), fresh);
       }
     }
   } catch {
@@ -67,6 +68,23 @@ function migrateV88(d) {
     itTickets: (d.itTickets || []).map((t) => (t.assigned_to === "ADM02" ? { ...t, assigned_to: "SA001" } : t)),
     bgvAccess: (d.bgvAccess || []).map((g) => (g.code === "ADM02" && !g.revoked ? { ...g, revoked: true, revoked_at: new Date().toISOString(), revoked_by: "SYSTEM" } : g)),
   };
+}
+// v10.2b: BGV tracking content — fill checks nobody has worked on with their stage, tracking log, details and
+// document checklist, and add the demo candidate cases that show the started / on-hold / HR-review statuses.
+function migrateBgvTrack(d, fresh) {
+  if (d.bgvTrack || !Array.isArray(d.bgv)) return { ...d, bgvTrack: true };
+  const empBy = Object.fromEntries((d.employees || []).map((e) => [e.employee_code, e]));
+  const bgv = d.bgv.map((c) => enrichBgvCase(clone(c), empBy[c.employee_code] || null));
+  const candIds = new Set((d.candidates || []).map((c) => c.id));
+  const ids = new Set(bgv.map((c) => c.id));
+  let n = bgv.reduce((m, c) => Math.max(m, Number(String(c.id).replace(/\D/g, "")) || 0), 0);
+  for (const c of fresh.bgv || []) {
+    if (!c.candidate_id || !candIds.has(c.candidate_id) || bgv.some((x) => x.candidate_id === c.candidate_id)) continue;
+    const id = ids.has(c.id) ? `BGV-${String(++n).padStart(4, "0")}` : c.id;
+    ids.add(id);
+    bgv.push({ ...clone(c), id });
+  }
+  return { ...d, bgv, bgvTrack: true };
 }
 // v10.2: companies & locations, and the expense hub, for browsers holding older data.
 function migrateV101(d, parsed) {

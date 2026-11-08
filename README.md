@@ -19,6 +19,16 @@ and payroll, lets the Super Admin add or edit them, lets HR move staff between l
 and has **Admin access**: limit an admin to some companies or locations, after which they see only those and the header picker
 offers only those. The employee form has *Company* and *Location* fields; new requests are stamped with both.
 
+**Background verification – tracking content.** The BGV module itself is unchanged; its demo cases now carry what HR
+captures while tracking them. Every check has its stage and a dated tracking log; *Document verification* has its
+checklist (Aadhaar, PAN, passport, degree, mark sheets, relieving letter, payslips, last offer letter) with per-document
+status; *PF / UAN (EPFO)* has UAN, establishment, member ID, contribution dates and the EPFO-vs-declared result; *Address*
+has method, field agent, visit date, outcome, respondent, staying-since and geo-tag; *Previous-employer official email*
+has the employer, HR contact, official-domain email, sent / response dates and the response. Three candidate cases show
+the overall statuses the employee cases did not: **Started** (Kavya Menon), **On hold** (Arjun Nair) and **Under HR
+review** (Sameer Ali, with a PF "not applicable" and a reference "unable to verify"). Browsers holding older data get the
+same content on next load; checks HR has already worked on are left as they are (`src/data/seedBgvTracking.js`).
+
 **Expense hub** (`/expense-hub`, Finance with the expense / advance / payroll module, and Super Admin) brings in employee
 expenses, company-paid travel-desk bookings, corporate-card spends and advances from other apps — SAP Concur, Zoho Expense,
 Expensify, Happay, Fyle, Rydoo, Navan, MakeMyTrip myBiz, Uber for Business, American Express Corporate, Ramp, Oracle NetSuite,

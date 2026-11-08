@@ -1,12 +1,12 @@
 // Background verification (BGV): HR case management, access control, employee self-service and status on employee screens.
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControl, FormControlLabel, IconButton, InputLabel, LinearProgress, MenuItem, Select, Stack, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, TextField, Tooltip, Typography } from "@mui/material";
-import { AddRounded, CloseRounded, UploadFileRounded, NotificationsActiveRounded, LockRounded, VerifiedUserRounded, AttachFileRounded, DownloadRounded } from "@mui/icons-material";
+import { Alert, Box, Button, Checkbox, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControl, FormControlLabel, IconButton, InputLabel, LinearProgress, MenuItem, Select, Stack, Step, StepLabel, Stepper, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from "@mui/material";
+import { AddRounded, CloseRounded, UploadFileRounded, NotificationsActiveRounded, LockRounded, VerifiedUserRounded, AttachFileRounded, DownloadRounded, PauseCircleRounded, PlayCircleRounded, ExpandMoreRounded, ExpandLessRounded } from "@mui/icons-material";
 import { useStore } from "../../store/AppStore.jsx";
 import { PageHeader, SectionCard, StatCard, Grid, Tag, TableWrap, Mono, PersonCell, EmptyState, KeyVal, ConfirmDialog } from "../kit/UI.jsx";
 import { AiInsight } from "../ai/AiInsight.jsx";
 import { AiButton, AiResult, useAiRun } from "./aiKit.jsx";
-import { BGV_CHECKS, BGV_CHECK_LABEL, BGV_PACKAGES, BGV_STATUS, CHECK_STATUS, bgvStatus, bgvProgress, bgvFor, bgvAccessLevel, canManageBgv, directory } from "../../lib/collab.js";
+import { BGV_CHECKS, BGV_CHECK_LABEL, BGV_CHECK_DEF, BGV_PACKAGES, BGV_STATUS, CHECK_STATUS, CHECK_DONE, CASE_STEPS, DOCUMENT_ITEMS, DOC_ITEM_STATUS, bgvStatus, bgvProgress, bgvStep, bgvFor, bgvAccessLevel, bgvChecksFor, canManageBgv, directory, stagesOf, stageLabel, checkStage, stageIndex, fieldsOf, officialEmailCheck } from "../../lib/collab.js";
 import { fmtDate, fmtDateTime, isoDate, readFileAsDataUrl, downloadCsv, timeAgo } from "../../lib/utils.js";
 
 export function BgvChip({ c, status, sx }) {
@@ -15,6 +15,134 @@ export function BgvChip({ c, status, sx }) {
   return <Tag tone={def.tone} sx={sx}>{def.label}</Tag>;
 }
 const CheckChip = ({ s }) => <Tag tone={CHECK_STATUS[s]?.tone || "neutral"}>{CHECK_STATUS[s]?.label || s}</Tag>;
+const TONE_COLOR = { good: "#2e7d4f", bad: "#b0291f", warn: "#b26a00", info: "#1f5f99", neutral: "#9aa39c" };
+
+/** Overall tracker for a case: Initiated → Consent signed → Started → Verification → HR review → Cleared / closed. */
+export function CaseTracker({ c, sx }) {
+  const step = bgvStep(c);
+  const st = bgvStatus(c);
+  const bad = st === "discrepancy";
+  const last = c.closed_status ? (c.closed_status === "discrepancy" ? "Closed · discrepancy" : BGV_STATUS[c.closed_status]?.label) : "Cleared / closed";
+  return (
+    <Box sx={{ py: 1.2, px: 0.5, border: "1px solid #e5eae5", borderRadius: 1.5, bgcolor: "#fbfcfb", ...sx }}>
+      <Stepper activeStep={c.closed_status ? 6 : step} alternativeLabel sx={{ "& .MuiStepLabel-label": { fontSize: "0.58rem !important", mt: "4px !important" }, "& .MuiStepIcon-root": { width: 20, height: 20 } }}>
+        {CASE_STEPS.map(([k, label], i) => (
+          <Step key={k} completed={i < step || !!c.closed_status}>
+            <StepLabel error={(bad && i === step) || (i === 5 && c.closed_status === "discrepancy")} optional={i === step && !c.closed_status ? <Typography sx={{ fontSize: "0.52rem", color: TONE_COLOR[BGV_STATUS[st]?.tone] || "#78827b", textAlign: "center" }}>{BGV_STATUS[st]?.label}</Typography> : null}>
+              {i === 5 ? last : label}
+            </StepLabel>
+          </Step>
+        ))}
+      </Stepper>
+      {c.on_hold && <Typography sx={{ fontSize: "0.6rem", color: "#b26a00", textAlign: "center", mt: 0.5 }}>On hold since {fmtDate(c.on_hold.at)} · {c.on_hold.reason}</Typography>}
+    </Box>
+  );
+}
+
+/** A check's own steps as dots, with the current one named. */
+export function StageDots({ k, showLabel = true }) {
+  const st = stagesOf(k.type);
+  const idx = stageIndex(k);
+  const tone = CHECK_STATUS[k.status]?.tone || "info";
+  return (
+    <Tooltip title={st.map(([, l], i) => `${i < idx ? "✓" : i === idx ? "●" : "○"} ${l}`).join("  ")}>
+      <Stack direction="row" sx={{ alignItems: "center", gap: 0.4 }}>
+        {st.map(([key], i) => <Box key={key} sx={{ width: i === idx ? 10 : 7, height: i === idx ? 10 : 7, borderRadius: "50%", bgcolor: i < idx || (i === idx && CHECK_DONE.includes(k.status)) ? TONE_COLOR[tone === "neutral" ? "good" : tone] : i === idx ? TONE_COLOR[tone] : "#dfe4df", border: i === idx ? "2px solid #fff" : 0, boxShadow: i === idx ? `0 0 0 1px ${TONE_COLOR[tone]}` : "none" }} />)}
+        {showLabel && <Typography sx={{ fontSize: "0.58rem", color: "#5c675f", ml: 0.5, whiteSpace: "nowrap" }}>{stageLabel(k.type, checkStage(k))}</Typography>}
+      </Stack>
+    </Tooltip>
+  );
+}
+
+const optLabel = (f, v) => (f[3] ? f[3].find(([x]) => x === v)?.[1] : v);
+const defaultItems = () => DOCUMENT_ITEMS.map((name) => ({ name, status: "pending" }));
+
+/** What was captured for a check: details, document checklist and its own tracking log. */
+function CheckDetails({ k }) {
+  const { nameOf } = useStore();
+  const [log, setLog] = useState(false);
+  const fields = fieldsOf(k.type).filter((f) => k.details?.[f[0]]);
+  return (
+    <Box sx={{ mt: 0.8 }}>
+      {fields.length > 0 && (
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 0.6, mt: 0.4 }}>
+          {fields.map((f) => (
+            <Box key={f[0]}>
+              <Typography sx={{ fontSize: "0.52rem", color: "#78827b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{f[1]}</Typography>
+              <Typography sx={{ fontSize: "0.64rem", fontWeight: 600, wordBreak: "break-word" }}>{f[2] === "date" ? fmtDate(k.details[f[0]]) : optLabel(f, k.details[f[0]])}</Typography>
+              {f[2] === "email" && <Typography sx={{ fontSize: "0.52rem", color: officialEmailCheck(k.details[f[0]]).ok ? "#2e7d4f" : "#b0291f" }}>{officialEmailCheck(k.details[f[0]]).text}</Typography>}
+            </Box>
+          ))}
+        </Box>
+      )}
+      {k.type === "documents" && k.items?.length > 0 && (
+        <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.5, mt: 0.8 }}>
+          {k.items.map((i) => <Tag key={i.name} tone={DOC_ITEM_STATUS[i.status]?.tone}>{i.name}: {DOC_ITEM_STATUS[i.status]?.label}</Tag>)}
+        </Stack>
+      )}
+      {k.tracking?.length > 0 && (
+        <>
+          <Button size="small" onClick={() => setLog(!log)} endIcon={log ? <ExpandLessRounded /> : <ExpandMoreRounded />} sx={{ fontSize: "0.56rem", mt: 0.4, p: 0, minWidth: 0 }}>Tracking log ({k.tracking.length})</Button>
+          <Collapse in={log}>
+            <Stack spacing={0.3} sx={{ mt: 0.4, pl: 1, borderLeft: "2px solid #e5eae5" }}>
+              {k.tracking.map((t, i) => <Typography key={i} sx={{ fontSize: "0.58rem" }}><b>{stageLabel(k.type, t.stage)}</b> · {fmtDateTime(t.at)} · {nameOf(t.by)}{t.note ? ` — ${t.note}` : ""}</Typography>)}
+            </Stack>
+          </Collapse>
+        </>
+      )}
+    </Box>
+  );
+}
+
+/** HR form to move a check along its steps and record what was found. */
+function CheckEditor({ c, k, onDone }) {
+  const { updateBgvCheck, notifyToast } = useStore();
+  const [f, setF] = useState(() => ({ status: k.status, stage: checkStage(k), details: { ...(k.details || {}) }, items: k.type === "documents" ? (k.items?.length ? k.items.map((i) => ({ ...i })) : defaultItems()) : null, remarks: k.remarks || "", candidate_note: k.candidate_note || "", track_note: "" }));
+  const [error, setError] = useState("");
+  const setD = (key, v) => setF({ ...f, details: { ...f.details, [key]: v } });
+  const save = () => {
+    const r = updateBgvCheck(c.id, k.type, { ...f, items: f.items || undefined });
+    if (!r.ok) return setError(r.error);
+    notifyToast("Check updated.");
+    onDone();
+  };
+  return (
+    <Stack spacing={1.2} sx={{ mt: 1.2, p: 1.2, bgcolor: "#f7f9f7", borderRadius: 1.5 }}>
+      {error && <Alert severity="error" sx={{ fontSize: "0.62rem", py: 0 }}>{error}</Alert>}
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2}>
+        <FormControl size="small" fullWidth><InputLabel>Tracking stage</InputLabel><Select label="Tracking stage" value={f.stage} onChange={(e) => setF({ ...f, stage: e.target.value })}>{stagesOf(k.type).map(([v, l], i) => <MenuItem key={v} value={v}>{i + 1}. {l}</MenuItem>)}</Select></FormControl>
+        <FormControl size="small" fullWidth><InputLabel>Outcome</InputLabel><Select label="Outcome" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value, stage: CHECK_DONE.includes(e.target.value) ? "completed" : f.stage === "completed" ? stagesOf(k.type).at(-2)[0] : f.stage })}>{Object.entries(CHECK_STATUS).map(([v, d]) => <MenuItem key={v} value={v}>{d.label}</MenuItem>)}</Select></FormControl>
+      </Stack>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.2 }}>
+        {fieldsOf(k.type).map((fd) => fd[2] === "select" ? (
+          <FormControl key={fd[0]} size="small"><InputLabel>{fd[1]}</InputLabel><Select label={fd[1]} value={f.details[fd[0]] || ""} onChange={(e) => setD(fd[0], e.target.value)}><MenuItem value="">—</MenuItem>{fd[3].map(([v, l]) => <MenuItem key={v} value={v}>{l}</MenuItem>)}</Select></FormControl>
+        ) : (
+          <TextField key={fd[0]} size="small" label={fd[1]} type={fd[2] === "date" ? "date" : "text"} value={f.details[fd[0]] || ""} onChange={(e) => setD(fd[0], e.target.value)} slotProps={fd[2] === "date" ? { inputLabel: { shrink: true } } : undefined}
+            helperText={fd[2] === "email" && f.details[fd[0]] ? officialEmailCheck(f.details[fd[0]]).text : undefined} error={fd[2] === "email" && !!f.details[fd[0]] && !officialEmailCheck(f.details[fd[0]]).ok} />
+        ))}
+      </Box>
+      {f.items && (
+        <Box>
+          <Typography sx={{ fontSize: "0.6rem", fontWeight: 700, mb: 0.6 }}>Document checklist</Typography>
+          <Stack spacing={0.6}>
+            {f.items.map((it, i) => (
+              <Stack key={it.name} direction="row" sx={{ alignItems: "center", gap: 1 }}>
+                <Typography sx={{ fontSize: "0.62rem", flex: 1 }}>{it.name}</Typography>
+                <ToggleButtonGroup size="small" exclusive value={it.status} onChange={(_, v) => v && setF({ ...f, items: f.items.map((x, j) => (j === i ? { ...x, status: v } : x)) })}>
+                  {Object.entries(DOC_ITEM_STATUS).map(([v, d]) => <ToggleButton key={v} value={v} sx={{ fontSize: "0.5rem", py: 0.2, px: 0.7, textTransform: "none" }}>{d.label.split(" /")[0]}</ToggleButton>)}
+                </ToggleButtonGroup>
+              </Stack>
+            ))}
+          </Stack>
+        </Box>
+      )}
+      <TextField size="small" label="Tracking note (optional)" placeholder="e.g. Agent called, visit fixed for Saturday 11 am" value={f.track_note} onChange={(e) => setF({ ...f, track_note: e.target.value })} />
+      <TextField size="small" label={f.status === "discrepancy" ? "What was declared vs verified *" : f.status === "unable_to_verify" ? "Why it could not be verified *" : "Internal remarks"} multiline minRows={2} value={f.remarks} onChange={(e) => setF({ ...f, remarks: e.target.value })} />
+      {f.status === "insufficient" && <TextField size="small" label="What should the person upload? *" value={f.candidate_note} onChange={(e) => setF({ ...f, candidate_note: e.target.value })} />}
+      <Stack direction="row" spacing={1}><Button size="small" variant="contained" onClick={save}>Save</Button><Button size="small" color="inherit" onClick={onDone}>Cancel</Button></Stack>
+    </Stack>
+  );
+}
 
 function overdue(c) {
   const s = bgvStatus(c);
@@ -41,11 +169,13 @@ export function BgvAdminPage() {
       <Box sx={{ mb: 2, borderBottom: "1px solid #e5eae4" }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" allowScrollButtonsMobile>
           <Tab value="cases" label="Cases" sx={{ fontSize: "0.7rem" }} />
+          <Tab value="tracker" label="Check tracker" sx={{ fontSize: "0.7rem" }} />
           <Tab value="vendors" label="Vendors & packages" sx={{ fontSize: "0.7rem" }} />
           <Tab value="access" label="Access & permissions" sx={{ fontSize: "0.7rem" }} />
         </Tabs>
       </Box>
       {tab === "cases" && <BgvCases />}
+      {tab === "tracker" && <BgvTracker />}
       {tab === "vendors" && <BgvVendors />}
       {tab === "access" && <BgvAccessPanel />}
     </>
@@ -65,7 +195,7 @@ function BgvCases() {
   const count = (s) => visible.filter((c) => bgvStatus(c) === s).length;
   const tat = visible.filter((c) => c.closed_at).map((c) => (new Date(c.closed_at) - new Date(c.initiated_at)) / 86400000);
   const facts = [
-    `${visible.length} cases: ${count("clear") + count("cleared_with_remarks")} clear, ${count("in_progress")} in progress, ${count("insufficient")} waiting for documents, ${count("discrepancy")} with a discrepancy, ${count("consent_pending")} waiting for consent`,
+    `${visible.length} cases: ${count("clear") + count("cleared_with_remarks")} cleared, ${count("review")} under HR review (all checks done), ${count("started")} started, ${count("on_hold")} on hold, ${count("in_progress")} in verification, ${count("insufficient")} waiting for documents, ${count("discrepancy")} with a discrepancy, ${count("consent_pending")} waiting for consent`,
     `${visible.filter(overdue).length} case(s) past their due date: ${visible.filter(overdue).map((c) => `${c.name} (due ${c.due_date})`).join(", ") || "none"}`,
     ...visible.filter((c) => bgvStatus(c) === "discrepancy").map((c) => `Discrepancy – ${c.name}: ${c.checks.filter((k) => k.status === "discrepancy").map((k) => `${BGV_CHECK_LABEL[k.type]}: ${k.remarks}`).join("; ")}`),
     ...visible.filter((c) => bgvStatus(c) === "insufficient").map((c) => `Insufficient – ${c.name}: ${c.checks.filter((k) => k.status === "insufficient").map((k) => BGV_CHECK_LABEL[k.type]).join(", ")}`),
@@ -74,12 +204,16 @@ function BgvCases() {
   ];
   return (
     <Stack spacing={2.5}>
-      <Grid min={150}>
-        <StatCard label="Open cases" value={visible.filter((c) => !c.closed_status).length} hint={`${count("consent_pending")} need consent`} onClick={() => setStatus("")} />
+      <Grid min={128}>
+        <StatCard label="Open cases" value={visible.filter((c) => !c.closed_status).length} hint={`${count("consent_pending")} awaiting consent`} onClick={() => setStatus("")} />
+        <StatCard label="Started" value={count("started")} tone="info" hint="Consent in, work not begun" onClick={() => setStatus("started")} />
+        <StatCard label="In verification" value={count("in_progress")} tone="info" onClick={() => setStatus("in_progress")} />
         <StatCard label="Insufficient docs" value={count("insufficient")} tone="warn" onClick={() => setStatus("insufficient")} />
+        <StatCard label="On hold" value={count("on_hold")} tone="warn" onClick={() => setStatus("on_hold")} />
         <StatCard label="Discrepancies" value={count("discrepancy")} tone="bad" onClick={() => setStatus("discrepancy")} />
+        <StatCard label="Under HR review" value={count("review")} tone="info" hint="All checks done – close" onClick={() => setStatus("review")} />
         <StatCard label="Past due date" value={visible.filter(overdue).length} tone="bad" onClick={() => setStatus("overdue")} />
-        <StatCard label="Clear" value={count("clear") + count("cleared_with_remarks")} tone="good" onClick={() => setStatus("clear")} />
+        <StatCard label="Cleared" value={count("clear") + count("cleared_with_remarks")} tone="good" onClick={() => setStatus("clear")} />
       </Grid>
       <AiInsight title="AI verification brief" audience="the HR background-verification team" facts={facts} />
       <SectionCard
@@ -87,7 +221,7 @@ function BgvCases() {
         subtitle="Click a case to see checks, documents and the timeline"
         action={
           <Stack direction="row" spacing={1}>
-            <Button size="small" variant="outlined" startIcon={<DownloadRounded />} onClick={() => downloadCsv("bgv-cases.csv", ["case", "name", "subject", "package", "vendor", "consent", "status", "progress", "initiated", "due"], rows.map((c) => [c.id, c.name, c.subject_type, BGV_PACKAGES[c.package]?.label, data.bgvVendors.find((v) => v.id === c.vendor_id)?.name, c.consent?.status, BGV_STATUS[bgvStatus(c)].label, `${bgvProgress(c)}%`, c.initiated_at.slice(0, 10), c.due_date]))}>Export</Button>
+            <Button size="small" variant="outlined" startIcon={<DownloadRounded />} onClick={() => downloadCsv("bgv-cases.csv", ["case", "name", "subject", "package", "vendor", "consent", "tracking step", "status", "progress", "initiated", "due", ...BGV_CHECKS.map(([, l]) => l)], rows.map((c) => [c.id, c.name, c.subject_type, BGV_PACKAGES[c.package]?.label, data.bgvVendors.find((v) => v.id === c.vendor_id)?.name, c.consent?.status, CASE_STEPS[Math.max(0, bgvStep(c))][1], BGV_STATUS[bgvStatus(c)].label, `${bgvProgress(c)}%`, c.initiated_at.slice(0, 10), c.due_date, ...BGV_CHECKS.map(([t]) => { const k = c.checks.find((x) => x.type === t); return k ? `${CHECK_STATUS[k.status]?.label} · ${stageLabel(t, checkStage(k))}` : ""; })]))}>Export</Button>
             {manage && <Button size="small" variant="contained" startIcon={<AddRounded />} onClick={() => setStart(true)}>Start verification</Button>}
           </Stack>
         }
@@ -100,7 +234,7 @@ function BgvCases() {
         </Stack>
         <TableWrap>
           <Table size="small" sx={{ minWidth: 980 }}>
-            <TableHead><TableRow><TableCell>Case</TableCell><TableCell>Person</TableCell><TableCell>Package · vendor</TableCell><TableCell>Consent</TableCell><TableCell sx={{ minWidth: 140 }}>Progress</TableCell><TableCell>Due</TableCell><TableCell>Status</TableCell><TableCell>Your access</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>Case</TableCell><TableCell>Person</TableCell><TableCell>Package · vendor</TableCell><TableCell>Consent</TableCell><TableCell sx={{ minWidth: 150 }}>Tracking</TableCell><TableCell>Due</TableCell><TableCell>Status</TableCell><TableCell>Your access</TableCell></TableRow></TableHead>
             <TableBody>
               {rows.map((c) => {
                 const s = subjectOf(data, c);
@@ -111,7 +245,7 @@ function BgvCases() {
                     <TableCell><PersonCell name={s.name} sub={s.sub} /></TableCell>
                     <TableCell><Typography sx={{ fontSize: "0.68rem", fontWeight: 600 }}>{BGV_PACKAGES[c.package]?.label}</Typography><Typography sx={{ fontSize: "0.58rem", color: "#78827b" }}>{data.bgvVendors.find((v) => v.id === c.vendor_id)?.name}</Typography></TableCell>
                     <TableCell>{c.consent?.status === "given" ? <Tag tone="good">Signed</Tag> : <Tag tone="warn">Pending</Tag>}</TableCell>
-                    <TableCell><LinearProgress variant="determinate" value={bgvProgress(c)} sx={{ height: 6, borderRadius: 3 }} /><Typography sx={{ fontSize: "0.56rem", color: "#78827b" }}>{c.checks.filter((k) => k.status === "verified").length}/{c.checks.length} verified</Typography></TableCell>
+                    <TableCell><Typography sx={{ fontSize: "0.6rem", fontWeight: 700 }}>{CASE_STEPS[Math.max(0, bgvStep(c))][1]}</Typography><LinearProgress variant="determinate" value={bgvProgress(c)} sx={{ height: 5, borderRadius: 3, my: 0.3 }} /><Typography sx={{ fontSize: "0.54rem", color: "#78827b" }}>{c.checks.filter((k) => CHECK_DONE.includes(k.status)).length}/{c.checks.length} checks done · {bgvProgress(c)}%</Typography></TableCell>
                     <TableCell sx={{ whiteSpace: "nowrap", color: overdue(c) ? "error.main" : undefined, fontWeight: overdue(c) ? 700 : 400 }}>{fmtDate(c.due_date)}</TableCell>
                     <TableCell><BgvChip c={c} /></TableCell>
                     <TableCell><Tag tone={lvl === "full" ? "info" : "neutral"}>{lvl}</Tag></TableCell>
@@ -141,6 +275,9 @@ export function StartBgvDialog({ open, onClose, onStarted, preset = {} }) {
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const vendor = data.bgvVendors.find((v) => v.id === f.vendor_id);
   const pkg = BGV_PACKAGES[f.package];
+  const subjCountry = f.subject === "employee" ? data.employees.find((e) => e.employee_code === f.employee_code)?.country_code || "IN" : "IN";
+  const pkgChecks = bgvChecksFor(f.package, subjCountry);
+  const offers = (k) => BGV_CHECK_DEF[k]?.inhouse || vendor?.checks.includes(k);
   const openFor = new Set(data.bgv.filter((c) => !c.cancelled && !c.closed_status).flatMap((c) => [c.employee_code, c.candidate_id]));
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -157,12 +294,12 @@ export function StartBgvDialog({ open, onClose, onStarted, preset = {} }) {
             <FormControl size="small"><InputLabel>Candidate *</InputLabel><Select label="Candidate *" value={f.candidate_id} onChange={(e) => setF({ ...f, candidate_id: e.target.value })}>{data.candidates.filter((c) => ["interview", "offer", "hired"].includes(c.stage)).map((c) => <MenuItem key={c.id} value={c.id} disabled={openFor.has(c.id)}>{c.name} · {data.reqs.find((r) => r.id === c.req_id)?.role} · {c.stage}{openFor.has(c.id) ? " (open case)" : ""}</MenuItem>)}</Select></FormControl>
           )}
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-            <FormControl size="small" fullWidth><InputLabel>Package</InputLabel><Select label="Package" value={f.package} onChange={(e) => setF({ ...f, package: e.target.value })}>{Object.entries(BGV_PACKAGES).map(([k, p]) => <MenuItem key={k} value={k}>{p.label} · {p.checks.length} checks · {p.tat} days</MenuItem>)}</Select></FormControl>
+            <FormControl size="small" fullWidth><InputLabel>Package</InputLabel><Select label="Package" value={f.package} onChange={(e) => setF({ ...f, package: e.target.value })}>{Object.entries(BGV_PACKAGES).map(([k, p]) => <MenuItem key={k} value={k}>{p.label} · {bgvChecksFor(k, subjCountry).length} checks · {p.tat} days</MenuItem>)}</Select></FormControl>
             <FormControl size="small" fullWidth><InputLabel>Vendor</InputLabel><Select label="Vendor" value={f.vendor_id} onChange={(e) => setF({ ...f, vendor_id: e.target.value })}>{data.bgvVendors.map((v) => <MenuItem key={v.id} value={v.id}>{v.name} · ₹{v.cost[f.package] ?? "—"}</MenuItem>)}</Select></FormControl>
           </Stack>
           <Box>
             <Typography variant="caption" color="text.secondary">Checks in this package</Typography>
-            <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.6, mt: 0.5 }}>{pkg.checks.map((k) => <Tag key={k} tone={vendor?.checks.includes(k) ? "info" : "bad"}>{BGV_CHECK_LABEL[k]}{vendor?.checks.includes(k) ? "" : " – not offered"}</Tag>)}</Stack>
+            <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.6, mt: 0.5 }}>{pkgChecks.map((k) => <Tag key={k} tone={offers(k) ? "info" : "bad"}>{BGV_CHECK_LABEL[k]}{BGV_CHECK_DEF[k]?.inhouse ? " · in-house" : offers(k) ? "" : " – not offered"}</Tag>)}</Stack>
           </Box>
           <TextField label="Note for the vendor (optional)" multiline minRows={2} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />
           <Alert severity="info" sx={{ fontSize: "0.65rem" }}>The person is asked to e-sign consent first (DPDP Act 2023 / FCRA / GDPR as applicable). Checks start only after consent.</Alert>
@@ -178,7 +315,8 @@ export function StartBgvDialog({ open, onClose, onStarted, preset = {} }) {
 
 export function BgvCaseDrawer({ id, onClose }) {
   const store = useStore();
-  const { data, user, nameOf, logBgvView, updateBgvCheck, closeBgv, reopenBgv, cancelBgv, remindBgv, giveBgvConsent, notifyToast } = store;
+  const { data, user, nameOf, logBgvView, closeBgv, reopenBgv, cancelBgv, remindBgv, giveBgvConsent, holdBgv, notifyToast } = store;
+  const [hold, setHold] = useState(null);
   const c = id ? data.bgv.find((x) => x.id === id) : null;
   const lvl = c ? bgvAccessLevel(data, user, c) : null;
   const [edit, setEdit] = useState(null);
@@ -199,7 +337,8 @@ export function BgvCaseDrawer({ id, onClose }) {
     `Case ${c.id} for ${c.name} (${c.subject_type}); package ${BGV_PACKAGES[c.package].label}; vendor ${vendor?.name}; initiated ${c.initiated_at.slice(0, 10)}; due ${c.due_date}${overdue(c) ? " (OVERDUE)" : ""}`,
     `Consent: ${c.consent?.status}${c.consent?.at ? ` on ${c.consent.at.slice(0, 10)}` : ""}`,
     ...c.checks.map((k) => `${BGV_CHECK_LABEL[k.type]}: ${CHECK_STATUS[k.status].label}${k.remarks ? ` – ${k.remarks}` : ""}${k.docs?.length ? ` (${k.docs.length} document(s))` : ""}`),
-    `Overall status: ${BGV_STATUS[status].label}`,
+    `Overall status: ${BGV_STATUS[status].label}; tracking step: ${CASE_STEPS[Math.max(0, bgvStep(c))][1]}`,
+    ...c.checks.map((k) => `${BGV_CHECK_LABEL[k.type]} is at stage "${stageLabel(k.type, checkStage(k))}"${Object.keys(k.details || {}).length ? ` – ${Object.entries(k.details).filter(([, v]) => v).map(([a, v]) => `${a}: ${v}`).join(", ")}` : ""}`),
   ];
   const offlineSummary = () => {
     const disc = c.checks.filter((k) => k.status === "discrepancy");
@@ -231,6 +370,7 @@ export function BgvCaseDrawer({ id, onClose }) {
           <IconButton onClick={onClose} aria-label="Close"><CloseRounded /></IconButton>
         </Stack>
         <Alert icon={<LockRounded fontSize="small" />} severity="info" sx={{ mt: 1.5, fontSize: "0.62rem", py: 0 }}>Your access: <b>{lvl}</b>. This view was recorded in the audit log.</Alert>
+        <CaseTracker c={c} sx={{ mt: 1.5 }} />
         {lvl === "status" ? (
           <Box sx={{ mt: 2 }}>
             <KeyVal items={[["Overall status", BGV_STATUS[status].label], ["Due", fmtDate(c.due_date)], ["Progress", `${bgvProgress(c)}%`], ["Consent", c.consent?.status === "given" ? "Signed" : "Pending"]]} />
@@ -252,24 +392,21 @@ export function BgvCaseDrawer({ id, onClose }) {
             <Typography variant="h3" sx={{ mt: 2.5, mb: 1 }}>Checks</Typography>
             <Stack spacing={1}>
               {c.checks.map((k) => (
-                <Box key={k.type} sx={{ p: 1.3, border: "1px solid #e5eae5", borderRadius: 1.5 }}>
-                  <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
-                    <Typography sx={{ fontSize: "0.72rem", fontWeight: 700, flex: 1 }}>{BGV_CHECK_LABEL[k.type]}</Typography>
+                <Box key={k.type} sx={{ p: 1.3, border: "1px solid #e5eae5", borderRadius: 1.5, borderLeft: `3px solid ${TONE_COLOR[CHECK_STATUS[k.status]?.tone] || "#dfe4df"}` }}>
+                  <Stack direction="row" sx={{ alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                    <Box sx={{ flex: 1, minWidth: 180 }}>
+                      <Typography sx={{ fontSize: "0.72rem", fontWeight: 700 }}>{BGV_CHECK_LABEL[k.type]}{BGV_CHECK_DEF[k.type]?.inhouse ? <Typography component="span" sx={{ fontSize: "0.52rem", color: "#78827b", ml: 0.6 }}>in-house</Typography> : null}</Typography>
+                      <Box sx={{ mt: 0.4 }}><StageDots k={k} /></Box>
+                    </Box>
                     {k.verified_at && <Typography sx={{ fontSize: "0.56rem", color: "#78827b" }}>{fmtDate(k.verified_at)}</Typography>}
                     <CheckChip s={k.status} />
-                    {manage && !c.closed_status && <Button size="small" onClick={() => setEdit({ type: k.type, status: k.status, remarks: k.remarks || "", candidate_note: k.candidate_note || "" })}>Update</Button>}
+                    {manage && !c.closed_status && edit !== k.type && <Button size="small" onClick={() => setEdit(k.type)}>Update</Button>}
                   </Stack>
-                  {lvl === "full" && k.remarks && <Typography sx={{ fontSize: "0.62rem", color: k.status === "discrepancy" ? "#a54e45" : "#5c675f", mt: 0.5 }}>{k.remarks}</Typography>}
+                  {lvl === "full" && k.remarks && <Typography sx={{ fontSize: "0.62rem", color: ["discrepancy", "unable_to_verify"].includes(k.status) ? "#a54e45" : "#5c675f", mt: 0.5 }}>{k.remarks}</Typography>}
                   {lvl === "full" && k.status === "insufficient" && k.candidate_note && <Typography sx={{ fontSize: "0.6rem", color: "#8A5200", mt: 0.3 }}>Asked the person: {k.candidate_note}</Typography>}
+                  {lvl === "full" && <CheckDetails k={k} />}
                   {lvl === "full" && (k.docs || []).map((doc, i) => <Button key={i} size="small" startIcon={<AttachFileRounded sx={{ fontSize: 14 }} />} href={doc.data_url || undefined} download={doc.name} disabled={!doc.data_url} sx={{ fontSize: "0.58rem", mt: 0.3 }}>{doc.name} · {timeAgo(doc.at)}</Button>)}
-                  {edit?.type === k.type && (
-                    <Stack spacing={1.2} sx={{ mt: 1.2 }}>
-                      <FormControl size="small"><InputLabel>Status</InputLabel><Select label="Status" value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value })}>{Object.entries(CHECK_STATUS).map(([v, d]) => <MenuItem key={v} value={v}>{d.label}</MenuItem>)}</Select></FormControl>
-                      <TextField size="small" label={edit.status === "discrepancy" ? "What was declared vs verified *" : "Internal remarks"} multiline minRows={2} value={edit.remarks} onChange={(e) => setEdit({ ...edit, remarks: e.target.value })} />
-                      {edit.status === "insufficient" && <TextField size="small" label="What should the person upload? *" value={edit.candidate_note} onChange={(e) => setEdit({ ...edit, candidate_note: e.target.value })} />}
-                      <Stack direction="row" spacing={1}><Button size="small" variant="contained" onClick={() => { const r = updateBgvCheck(c.id, k.type, edit); if (!r.ok) return notifyToast(r.error, "error"); setEdit(null); notifyToast("Check updated."); }}>Save</Button><Button size="small" color="inherit" onClick={() => setEdit(null)}>Cancel</Button></Stack>
-                    </Stack>
-                  )}
+                  {edit === k.type && <CheckEditor c={c} k={k} onDone={() => setEdit(null)} />}
                 </Box>
               ))}
             </Stack>
@@ -278,6 +415,9 @@ export function BgvCaseDrawer({ id, onClose }) {
                 {!c.closed_status && <Button variant="contained" startIcon={<VerifiedUserRounded />} onClick={() => setClose({ decision: c.checks.some((k) => k.status === "discrepancy") ? "cleared_with_remarks" : "clear", remarks: "" })}>Close case</Button>}
                 {c.closed_status && <Button variant="outlined" onClick={() => { const r = reopenBgv(c.id); notifyToast(r.ok ? "Case reopened." : r.error, r.ok ? "success" : "error"); }}>Reopen</Button>}
                 {!c.closed_status && c.employee_code && <Button variant="outlined" startIcon={<NotificationsActiveRounded />} onClick={() => { const r = remindBgv(c.id); notifyToast(r.ok ? "Reminder sent." : r.error, r.ok ? "success" : "error"); }}>Send reminder</Button>}
+                {!c.closed_status && c.consent?.status === "given" && (c.on_hold
+                  ? <Button variant="outlined" startIcon={<PlayCircleRounded />} onClick={() => { const r = holdBgv(c.id, false); notifyToast(r.ok ? "Case resumed." : r.error, r.ok ? "success" : "error"); }}>Resume</Button>
+                  : <Button variant="outlined" color="warning" startIcon={<PauseCircleRounded />} onClick={() => setHold("")}>Put on hold</Button>)}
                 {!c.closed_status && c.consent?.status !== "given" && <Button variant="outlined" onClick={() => { const r = giveBgvConsent(c.id); notifyToast(r.ok ? "Paper consent recorded." : r.error, r.ok ? "success" : "error"); }}>Record paper consent</Button>}
                 {!c.closed_status && <Button color="error" onClick={() => setCancelDlg("")}>Cancel case</Button>}
               </Stack>
@@ -315,10 +455,71 @@ export function BgvCaseDrawer({ id, onClose }) {
           <Button variant="contained" onClick={() => { const r = closeBgv(c.id, close.decision, close.remarks); if (!r.ok) return notifyToast(r.error, "error"); setClose(null); notifyToast("Case closed."); }}>Close case</Button>
         </DialogActions>
       </Dialog>
+      <ConfirmDialog open={hold != null} title="Put verification on hold" text="Tracking pauses and the case shows as On hold until you resume it (for example, the person is on leave or the joining date moved)." confirmLabel="Put on hold" disabled={!String(hold || "").trim()} onClose={() => setHold(null)} onConfirm={() => { const r = holdBgv(c.id, true, hold); notifyToast(r.ok ? "Case on hold." : r.error, r.ok ? "success" : "error"); if (r.ok) setHold(null); }}>
+        <TextField fullWidth label="Reason *" value={hold || ""} onChange={(e) => setHold(e.target.value)} />
+      </ConfirmDialog>
       <ConfirmDialog open={cancelDlg != null} title="Cancel verification" text="The case is kept for the audit trail but no further checks run." confirmLabel="Cancel case" tone="error" disabled={!String(cancelDlg || "").trim()} onClose={() => setCancelDlg(null)} onConfirm={() => { const r = cancelBgv(c.id, cancelDlg); notifyToast(r.ok ? "Case cancelled." : r.error, r.ok ? "success" : "error"); if (r.ok) { setCancelDlg(null); onClose(); } }}>
         <TextField fullWidth label="Reason *" value={cancelDlg || ""} onChange={(e) => setCancelDlg(e.target.value)} />
       </ConfirmDialog>
     </Drawer>
+  );
+}
+
+/** Every case against every check: where each check stands, so HR can work one check type across all cases. */
+function BgvTracker() {
+  const { data, user } = useStore();
+  const [type, setType] = useState("");
+  const [closed, setClosed] = useState(false);
+  const [open, setOpen] = useState(null);
+  const cases = data.bgv.filter((c) => !c.cancelled && bgvAccessLevel(data, user, c) && bgvAccessLevel(data, user, c) !== "status" && (closed || !c.closed_status));
+  const types = BGV_CHECKS.map(([t]) => t).filter((t) => cases.some((c) => c.checks.some((k) => k.type === t)));
+  const cols = type ? [type] : types;
+  const summary = types.map((t) => {
+    const ks = cases.flatMap((c) => c.checks.filter((k) => k.type === t));
+    const by = (s) => ks.filter((k) => k.status === s).length;
+    return { t, total: ks.length, done: ks.filter((k) => CHECK_DONE.includes(k.status)).length, insufficient: by("insufficient"), discrepancy: by("discrepancy") + by("unable_to_verify") };
+  });
+  const stageCounts = type ? stagesOf(type).map(([s, l]) => [l, cases.flatMap((c) => c.checks.filter((k) => k.type === type && checkStage(k) === s)).length]) : [];
+  return (
+    <Stack spacing={2.5}>
+      <Grid min={150}>
+        {summary.map((x) => (
+          <Box key={x.t} onClick={() => setType(type === x.t ? "" : x.t)} sx={{ p: 1.3, border: `1px solid ${type === x.t ? "#1f5f99" : "#e5eae5"}`, borderRadius: 1.5, cursor: "pointer", bgcolor: type === x.t ? "#f1f6fb" : "#fff" }}>
+            <Typography sx={{ fontSize: "0.62rem", fontWeight: 700 }}>{BGV_CHECK_LABEL[x.t].split(" (")[0]}</Typography>
+            <Typography sx={{ fontSize: "1rem", fontWeight: 800 }}>{x.done}/{x.total}</Typography>
+            <Typography sx={{ fontSize: "0.54rem", color: "#78827b" }}>done{x.insufficient ? ` · ${x.insufficient} insufficient` : ""}{x.discrepancy ? ` · ${x.discrepancy} flagged` : ""}</Typography>
+          </Box>
+        ))}
+      </Grid>
+      {type && (
+        <SectionCard title={`${BGV_CHECK_LABEL[type]} · by stage`} subtitle="How many open checks sit at each step">
+          <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
+            {stageCounts.map(([l, n], i) => <Box key={l} sx={{ px: 1.4, py: 0.8, borderRadius: 1.5, bgcolor: n ? "#eef4fa" : "#f5f7f5", minWidth: 110 }}><Typography sx={{ fontSize: "0.54rem", color: "#78827b" }}>{i + 1}. {l}</Typography><Typography sx={{ fontSize: "0.95rem", fontWeight: 800 }}>{n}</Typography></Box>)}
+          </Stack>
+        </SectionCard>
+      )}
+      <SectionCard title="Check tracker" subtitle="Each cell shows the check's outcome and the step it is on. Click a row to open the case." action={<FormControlLabel control={<Checkbox size="small" checked={closed} onChange={(e) => setClosed(e.target.checked)} />} label={<Typography sx={{ fontSize: "0.62rem" }}>Include closed cases</Typography>} />} noPad>
+        <TableWrap>
+          <Table size="small" sx={{ minWidth: 240 + cols.length * 150 }}>
+            <TableHead><TableRow><TableCell>Case</TableCell><TableCell>Overall</TableCell>{cols.map((t) => <TableCell key={t}>{BGV_CHECK_LABEL[t].split(" (")[0]}</TableCell>)}</TableRow></TableHead>
+            <TableBody>
+              {cases.map((c) => (
+                <TableRow key={c.id} hover sx={{ cursor: "pointer" }} onClick={() => setOpen(c.id)}>
+                  <TableCell><PersonCell name={c.name} sub={`${c.id} · due ${fmtDate(c.due_date)}`} /></TableCell>
+                  <TableCell><BgvChip c={c} /><Typography sx={{ fontSize: "0.54rem", color: "#78827b", mt: 0.3 }}>{CASE_STEPS[Math.max(0, bgvStep(c))][1]}</Typography></TableCell>
+                  {cols.map((t) => {
+                    const k = c.checks.find((x) => x.type === t);
+                    return <TableCell key={t}>{k ? <Stack spacing={0.4}><CheckChip s={k.status} /><StageDots k={k} /></Stack> : <Typography sx={{ fontSize: "0.58rem", color: "#b5bcb6" }}>—</Typography>}</TableCell>;
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableWrap>
+        {!cases.length && <EmptyState title="No open cases" text="Tick “Include closed cases” to see finished ones." />}
+      </SectionCard>
+      <BgvCaseDrawer id={open} onClose={() => setOpen(null)} />
+    </Stack>
   );
 }
 
@@ -351,7 +552,7 @@ function BgvVendors() {
             <Box key={k} sx={{ p: 1.5, border: "1px solid #e5eae5", borderRadius: 1.5 }}>
               <Typography sx={{ fontWeight: 800, fontSize: "0.78rem" }}>{p.label}</Typography>
               <Typography sx={{ fontSize: "0.6rem", color: "#78827b", mb: 0.8 }}>{p.tat} working days · {p.checks.length} checks</Typography>
-              {p.checks.map((c) => <Typography key={c} sx={{ fontSize: "0.62rem" }}>• {BGV_CHECK_LABEL[c]}</Typography>)}
+              {p.checks.map((c) => <Typography key={c} sx={{ fontSize: "0.62rem" }}>• {BGV_CHECK_LABEL[c]}{BGV_CHECK_DEF[c]?.inhouse ? " (in-house HR)" : ""}{BGV_CHECK_DEF[c]?.countries ? ` – ${BGV_CHECK_DEF[c].countries.join(", ")} only` : ""}</Typography>)}
             </Box>
           ))}
         </Grid>
@@ -443,6 +644,23 @@ function BgvAccessPanel() {
 }
 
 // ── Employee: My background check ─────────────────────
+/** Plain-language next step for the person on one check (never shows internal remarks). */
+function selfAction(k) {
+  const d = k.details || {};
+  const stage = checkStage(k);
+  if (k.status === "insufficient") return k.candidate_note;
+  if (["discrepancy", "unable_to_verify"].includes(k.status)) return "HR will contact you about this check.";
+  if (k.status === "verified") return "Nothing – verified.";
+  if (k.status === "na") return "Not needed for you.";
+  if (k.type === "pf" && !d.uan) return "Share your 12-digit UAN with HR (it is on your payslip or the EPFO member portal).";
+  if (k.type === "address" && ["visit_scheduled"].includes(stage) && d.visit_date) return `${d.method === "digital" ? "Complete the geo-tagged address check in the link sent to you" : "A field agent will visit"} on ${fmtDate(d.visit_date)}. Please make sure someone is at home with ID.`;
+  if (k.type === "address" && stage === "agent_assigned") return "A field agent has been assigned and will call you to fix a visit time.";
+  if (k.type === "company_email" && ["email_sent", "reminder_sent"].includes(stage)) return "We have written to your previous employer's HR. You may nudge them to reply.";
+  if (k.type === "documents" && stage === "awaiting_docs") return "Upload your ID, degree, relieving letter and last 3 payslips here.";
+  if (k.type === "documents" && stage === "originals_seen") return "Originals seen – thank you.";
+  return "Nothing right now.";
+}
+
 export function MyBgvPage() {
   const { data, user, giveBgvConsent, uploadBgvDoc, notifyToast } = useStore();
   const c = bgvFor(data, user.employee_code);
@@ -461,10 +679,11 @@ export function MyBgvPage() {
       <Stack spacing={2.5}>
         <Grid min={160}>
           <StatCard label="Status" value={<BgvChip c={c} sx={{ height: 26, fontSize: "0.8rem" }} />} hint={`Case ${c.id}`} />
-          <StatCard label="Progress" value={`${bgvProgress(c)}%`} hint={`${c.checks.filter((k) => k.status === "verified").length} of ${c.checks.length} checks verified`} tone="info" />
+          <StatCard label="Progress" value={`${bgvProgress(c)}%`} hint={`${c.checks.filter((k) => CHECK_DONE.includes(k.status)).length} of ${c.checks.length} checks done`} tone="info" />
           <StatCard label="Expected by" value={fmtDate(c.due_date)} tone="neutral" hint={`${BGV_PACKAGES[c.package].label} package`} />
           <StatCard label="Action needed" value={c.consent?.status !== "given" ? "Consent" : c.checks.filter((k) => k.status === "insufficient").length || "None"} tone={c.consent?.status !== "given" || c.checks.some((k) => k.status === "insufficient") ? "warn" : "good"} />
         </Grid>
+        <CaseTracker c={c} />
         {c.consent?.status !== "given" && (
           <SectionCard title="Consent for background verification" subtitle="Required before any check can start">
             <Typography variant="body2" sx={{ mb: 1.5 }}>
@@ -479,15 +698,14 @@ export function MyBgvPage() {
         )}
         <SectionCard title="Checks" noPad>
           <Table size="small">
-            <TableHead><TableRow><TableCell>Check</TableCell><TableCell>Status</TableCell><TableCell>What you need to do</TableCell><TableCell>Your documents</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>Check</TableCell><TableCell>Where it is</TableCell><TableCell>Status</TableCell><TableCell>What you need to do</TableCell><TableCell>Your documents</TableCell></TableRow></TableHead>
             <TableBody>
               {c.checks.map((k) => (
                 <TableRow key={k.type}>
                   <TableCell sx={{ fontWeight: 600 }}>{BGV_CHECK_LABEL[k.type]}</TableCell>
+                  <TableCell><StageDots k={k} /></TableCell>
                   <TableCell><CheckChip s={k.status} /></TableCell>
-                  <TableCell sx={{ maxWidth: 320 }}>
-                    {k.status === "insufficient" ? <Typography sx={{ fontSize: "0.65rem", color: "#8A5200" }}>{k.candidate_note}</Typography> : k.status === "discrepancy" ? <Typography sx={{ fontSize: "0.65rem" }}>HR will contact you about this check.</Typography> : <Typography sx={{ fontSize: "0.65rem", color: "#78827b" }}>{k.status === "verified" ? "Nothing – verified." : "Nothing right now."}</Typography>}
-                  </TableCell>
+                  <TableCell sx={{ maxWidth: 320 }}><Typography sx={{ fontSize: "0.65rem", color: k.status === "insufficient" ? "#8A5200" : "#5c675f" }}>{selfAction(k)}</Typography></TableCell>
                   <TableCell>
                     <Stack spacing={0.3}>
                       {(k.docs || []).filter((dd) => dd.by === user.code).map((dd, i) => <Typography key={i} sx={{ fontSize: "0.58rem" }}>📎 {dd.name}</Typography>)}

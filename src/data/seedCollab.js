@@ -2,6 +2,7 @@
 // compliance records, internal chat, clients, meetings and calendar events. All dates are relative to "today".
 import { BGV_PACKAGES, complianceCalendar } from "../lib/collab.js";
 import { requiredDocs } from "../lib/empdocs.js";
+import { enrichBgvCase } from "./seedBgvTracking.js";
 import { isoDate, DAY } from "../lib/utils.js";
 
 function workday(n) {
@@ -35,7 +36,7 @@ function bgvCase(id, e, { pkg = "standard", vendor = "VND-1", started, consent =
     const st = statuses[type] || (closed ? "verified" : "pending");
     return { type, status: st, remarks: st === "discrepancy" ? statuses[`${type}_note`] || "" : st === "insufficient" ? statuses[`${type}_note`] || "Document not received" : "", candidate_note: st === "insufficient" ? statuses[`${type}_ask`] || "Please upload a clear copy." : "", verified_at: st === "verified" ? plus(init, 60 * 24 * (3 + (type.length % 5))) : null, docs: [] };
   });
-  return {
+  return enrichBgvCase({
     id,
     subject_type: candidate ? "candidate" : "employee",
     employee_code: e?.employee_code || null,
@@ -56,7 +57,7 @@ function bgvCase(id, e, { pkg = "standard", vendor = "VND-1", started, consent =
       ...(consent ? [{ at: plus(init, 360), by: e?.employee_code || "CANDIDATE", action: "Consent e-signed" }] : []),
       ...(closed ? [{ at: plus(init, 60 * 24 * p.tat), by: "ADM01", action: `Closed · ${closed === "clear" ? "Clear" : "Clear with remarks"}` }] : []),
     ],
-  };
+  }, e);
 }
 
 export function buildCollabSeed({ employees, candidates }) {
@@ -69,11 +70,11 @@ export function buildCollabSeed({ employees, candidates }) {
     { id: "VND-0", name: "In-house HR team", checks: ["identity", "address", "reference"], tat_days: 5, contact: "hr@peoplehub.demo", sla_pct: 98, cost: { basic: 0, standard: 0, comprehensive: 0, senior: 0 } },
   ];
   const special = {
-    EMP010: { pkg: "standard", started: ago(24), statuses: { identity: "verified", address: "verified", education: "verified", employment: "in_progress", criminal: "in_progress", reference: "pending" } },
-    EMP012: { pkg: "standard", started: ago(9), statuses: { identity: "verified", address: "insufficient", address_note: "Address proof is older than 3 months", address_ask: "Upload a utility bill or rental agreement dated in the last 3 months.", education: "insufficient", education_note: "Degree certificate missing", education_ask: "Upload your B.Tech degree certificate (or provisional certificate) and final mark sheet.", employment: "in_progress", criminal: "verified", reference: "pending" } },
+    EMP010: { pkg: "standard", started: ago(24), statuses: { identity: "verified", documents: "verified", pf: "in_progress", company_email: "in_progress", address: "verified", education: "verified", employment: "in_progress", criminal: "in_progress", reference: "pending" } },
+    EMP012: { pkg: "standard", started: ago(9), statuses: { identity: "verified", documents: "in_progress", pf: "in_progress", address: "insufficient", address_note: "Address proof is older than 3 months", address_ask: "Upload a utility bill or rental agreement dated in the last 3 months.", education: "insufficient", education_note: "Degree certificate missing", education_ask: "Upload your B.Tech degree certificate (or provisional certificate) and final mark sheet.", employment: "in_progress", criminal: "verified", reference: "pending" } },
     EMP016: { pkg: "standard", started: ago(2), consent: false },
     EMP017: { pkg: "standard", started: ago(1), consent: false },
-    EMP022: { pkg: "standard", started: ago(290), statuses: { identity: "verified", address: "verified", education: "verified", employment: "discrepancy", employment_note: "Previous employer confirms exit date 31-Mar-2024; candidate declared 30-Jun-2024 (3-month gap).", criminal: "verified", reference: "verified" } },
+    EMP022: { pkg: "standard", started: ago(290), statuses: { identity: "verified", documents: "verified", pf: "verified", company_email: "verified", address: "verified", education: "verified", employment: "discrepancy", employment_note: "Previous employer confirms exit date 31-Mar-2024; candidate declared 30-Jun-2024 (3-month gap).", criminal: "verified", reference: "verified" } },
     EMP003: { pkg: "senior", closed: "clear" },
     EMP005: { pkg: "senior", closed: "clear" },
     EMP007: { pkg: "comprehensive", closed: "clear" },
@@ -88,9 +89,27 @@ export function buildCollabSeed({ employees, candidates }) {
     bgv.push(bgvCase(`BGV-${String(n++).padStart(4, "0")}`, e, sp));
   }
   const cand = (name) => candidates.find((c) => c.name === name);
-  if (cand("Rohan Gupta")) bgv.push(bgvCase(`BGV-${String(n++).padStart(4, "0")}`, null, { candidate: cand("Rohan Gupta"), pkg: "basic", started: ago(3), statuses: { identity: "verified", address: "in_progress", criminal: "in_progress" } }));
+  if (cand("Rohan Gupta")) bgv.push(bgvCase(`BGV-${String(n++).padStart(4, "0")}`, null, { candidate: cand("Rohan Gupta"), pkg: "basic", started: ago(3), statuses: { identity: "verified", documents: "in_progress", address: "in_progress", criminal: "in_progress" } }));
   if (cand("Ishita Bose")) bgv.push(bgvCase(`BGV-${String(n++).padStart(4, "0")}`, null, { candidate: cand("Ishita Bose"), pkg: "standard", started: ago(1), consent: false }));
-  if (cand("Nikhil Joshi")) bgv.push(bgvCase(`BGV-${String(n++).padStart(4, "0")}`, null, { candidate: cand("Nikhil Joshi"), pkg: "standard", started: ago(12), statuses: { identity: "verified", address: "verified", education: "verified", employment: "verified", criminal: "verified", reference: "in_progress" } }));
+  if (cand("Nikhil Joshi")) bgv.push(bgvCase(`BGV-${String(n++).padStart(4, "0")}`, null, { candidate: cand("Nikhil Joshi"), pkg: "standard", started: ago(12), statuses: { identity: "verified", documents: "verified", address: "verified", education: "verified", employment: "verified", pf: "verified", company_email: "in_progress", criminal: "verified", reference: "in_progress" } }));
+  // Cases that show the remaining overall statuses: started, on hold and under HR review.
+  if (cand("Kavya Menon")) bgv.push(bgvCase(`BGV-${String(n++).padStart(4, "0")}`, null, { candidate: cand("Kavya Menon"), pkg: "standard", started: ago(1) }));
+  if (cand("Arjun Nair")) {
+    const c = bgvCase(`BGV-${String(n++).padStart(4, "0")}`, null, { candidate: cand("Arjun Nair"), pkg: "standard", started: ago(8), statuses: { identity: "verified", documents: "verified", address: "in_progress", education: "verified", employment: "in_progress", pf: "in_progress", company_email: "in_progress", criminal: "verified", reference: "pending" } });
+    c.on_hold = { reason: "Candidate relocating from Pune – address visit to be rescheduled after the move", at: ago(2), by: "ADM01" };
+    c.history.push({ at: ago(2), by: "ADM01", action: `Put on hold · ${c.on_hold.reason}` });
+    bgv.push(c);
+  }
+  if (cand("Sameer Ali")) {
+    const c = bgvCase(`BGV-${String(n++).padStart(4, "0")}`, null, { candidate: cand("Sameer Ali"), pkg: "standard", started: ago(11), statuses: { identity: "verified", documents: "verified", address: "verified", education: "verified", employment: "verified", pf: "na", company_email: "verified", criminal: "verified", reference: "unable_to_verify" } });
+    const ref = c.checks.find((k) => k.type === "reference");
+    ref.remarks = "Both referees unreachable after three calls and an email; the candidate has been asked for an alternate.";
+    ref.tracking.at(-1).note = ref.remarks;
+    const pf = c.checks.find((k) => k.type === "pf");
+    pf.remarks = "First job was with a firm below 20 staff – not covered by EPF.";
+    pf.tracking.at(-1).note = pf.remarks;
+    bgv.push(c);
+  }
   const bgvAccess = [
     { id: "BGA-1", code: "EMP007", role: "emp", level: "summary", scope: "team", granted_by: "SA001", granted_at: ago(30), expires_on: isoDate(Date.now() + 60 * DAY), reason: "Engineering manager – onboarding sign-off for new joiners", revoked: false },
     { id: "BGA-2", code: "ADM02", role: "admin", level: "status", scope: "all", granted_by: "SA001", granted_at: ago(90), expires_on: "", reason: "Finance – payroll activation only after BGV clear", revoked: true, revoked_at: ago(1), revoked_by: "SA001" },

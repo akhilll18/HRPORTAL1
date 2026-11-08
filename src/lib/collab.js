@@ -6,32 +6,45 @@ import { holidaysFor } from "../country/countryPacks.js";
 import { isoDate, DAY } from "./utils.js";
 
 // ── Background verification ─────────────────────────────
-export const BGV_CHECKS = [
-  ["identity", "Identity (Aadhaar / PAN / passport)"],
-  ["address", "Current & permanent address"],
-  ["education", "Highest education"],
-  ["employment", "Previous employment"],
-  ["criminal", "Criminal & court records"],
-  ["reference", "Professional references"],
-  ["database", "Global database & sanctions"],
-  ["credit", "Credit history"],
-  ["drug", "Drug test (5 panel)"],
+// `inhouse` checks are run by HR itself (no vendor needed); `countries` limits a check to subjects in those countries.
+export const BGV_CHECK_DEFS = [
+  { type: "identity", label: "Identity (Aadhaar / PAN / passport)" },
+  { type: "documents", label: "Document verification", inhouse: true },
+  { type: "address", label: "Address verification (field / digital)" },
+  { type: "education", label: "Highest education" },
+  { type: "employment", label: "Previous employment" },
+  { type: "pf", label: "PF / UAN service history (EPFO)", inhouse: true, countries: ["IN"] },
+  { type: "company_email", label: "Previous employer · official email check", inhouse: true },
+  { type: "criminal", label: "Criminal & court records" },
+  { type: "reference", label: "Professional references" },
+  { type: "database", label: "Global database & sanctions" },
+  { type: "credit", label: "Credit history" },
+  { type: "drug", label: "Drug test (5 panel)" },
 ];
+export const BGV_CHECKS = BGV_CHECK_DEFS.map((d) => [d.type, d.label]);
 export const BGV_CHECK_LABEL = Object.fromEntries(BGV_CHECKS);
+export const BGV_CHECK_DEF = Object.fromEntries(BGV_CHECK_DEFS.map((d) => [d.type, d]));
+/** Checks of a package that apply to a subject in `country` (PF is India-only). */
+export const bgvChecksFor = (pkg, country = "IN") => (BGV_PACKAGES[pkg]?.checks || []).filter((t) => !BGV_CHECK_DEF[t]?.countries || BGV_CHECK_DEF[t].countries.includes(country || "IN"));
 export const BGV_PACKAGES = {
-  basic: { label: "Basic", checks: ["identity", "address", "criminal"], tat: 5 },
-  standard: { label: "Standard", checks: ["identity", "address", "education", "employment", "criminal", "reference"], tat: 10 },
-  comprehensive: { label: "Comprehensive", checks: ["identity", "address", "education", "employment", "criminal", "reference", "database", "credit"], tat: 15 },
-  senior: { label: "Leadership / finance", checks: ["identity", "address", "education", "employment", "criminal", "reference", "database", "credit", "drug"], tat: 21 },
+  basic: { label: "Basic", checks: ["identity", "documents", "address", "criminal"], tat: 5 },
+  standard: { label: "Standard", checks: ["identity", "documents", "address", "education", "employment", "pf", "company_email", "criminal", "reference"], tat: 10 },
+  comprehensive: { label: "Comprehensive", checks: ["identity", "documents", "address", "education", "employment", "pf", "company_email", "criminal", "reference", "database", "credit"], tat: 15 },
+  senior: { label: "Leadership / finance", checks: ["identity", "documents", "address", "education", "employment", "pf", "company_email", "criminal", "reference", "database", "credit", "drug"], tat: 21 },
 };
+
+// Overall case status, in the order a case normally moves.
 export const BGV_STATUS = {
   not_started: { label: "Not started", tone: "neutral" },
-  consent_pending: { label: "Consent pending", tone: "warn" },
-  in_progress: { label: "In progress", tone: "info" },
+  consent_pending: { label: "Initiated · consent pending", tone: "warn" },
+  started: { label: "Started", tone: "info" },
+  in_progress: { label: "Verification in progress", tone: "info" },
   insufficient: { label: "Insufficient docs", tone: "warn" },
+  on_hold: { label: "On hold", tone: "warn" },
+  review: { label: "Under HR review", tone: "info" },
   discrepancy: { label: "Discrepancy", tone: "bad" },
-  clear: { label: "Clear", tone: "good" },
-  cleared_with_remarks: { label: "Clear with remarks", tone: "good" },
+  clear: { label: "Cleared", tone: "good" },
+  cleared_with_remarks: { label: "Cleared with remarks", tone: "good" },
   cancelled: { label: "Cancelled", tone: "neutral" },
 };
 export const CHECK_STATUS = {
@@ -40,8 +53,88 @@ export const CHECK_STATUS = {
   insufficient: { label: "Insufficient", tone: "warn" },
   verified: { label: "Verified", tone: "good" },
   discrepancy: { label: "Discrepancy", tone: "bad" },
+  unable_to_verify: { label: "Unable to verify", tone: "warn" },
   na: { label: "Not applicable", tone: "neutral" },
 };
+/** Outcomes that finish a check (it no longer needs work, though it may need a decision). */
+export const CHECK_DONE = ["verified", "na", "discrepancy", "unable_to_verify"];
+
+// ── Tracking: the steps each check moves through ─────────
+const DEFAULT_STAGES = [["initiated", "Initiated"], ["docs_collected", "Documents collected"], ["with_vendor", "Sent to vendor"], ["in_verification", "Verification in progress"], ["report_received", "Report received"], ["completed", "Completed"]];
+export const CHECK_STAGES = {
+  documents: [["awaiting_docs", "Awaiting documents"], ["docs_received", "Documents received"], ["originals_seen", "Originals sighted"], ["authenticity", "Authenticity check"], ["issuer_confirmed", "Confirmed with issuer"], ["completed", "Completed"]],
+  pf: [["uan_requested", "UAN requested"], ["uan_received", "UAN received"], ["epfo_fetched", "EPFO passbook fetched"], ["history_matched", "Service history compared"], ["completed", "Completed"]],
+  address: [["address_captured", "Address captured"], ["agent_assigned", "Field agent assigned"], ["visit_scheduled", "Visit scheduled"], ["visit_done", "Visit done"], ["report_submitted", "Report submitted"], ["completed", "Completed"]],
+  company_email: [["hr_identified", "Employer HR contact found"], ["domain_checked", "Official domain checked"], ["email_sent", "Verification email sent"], ["reminder_sent", "Reminder sent"], ["response_received", "Response received"], ["completed", "Completed"]],
+};
+export const stagesOf = (type) => CHECK_STAGES[type] || DEFAULT_STAGES;
+export const stageLabel = (type, stage) => stagesOf(type).find(([k]) => k === stage)?.[1] || stage;
+/** Current stage of a check; older records without one get a stage from their status. */
+export function checkStage(k) {
+  const st = stagesOf(k.type);
+  if (k.stage && st.some(([s]) => s === k.stage)) return k.stage;
+  if (CHECK_DONE.includes(k.status)) return "completed";
+  if (k.docs?.length) return st[1][0];
+  return st[0][0];
+}
+export const stageIndex = (k) => stagesOf(k.type).findIndex(([s]) => s === checkStage(k));
+
+// Check-specific details captured while tracking. kind: text | date | select | email
+export const DOCUMENT_ITEMS = ["Aadhaar card", "PAN card", "Passport", "Highest degree certificate", "Mark sheets", "Relieving / experience letter", "Last 3 payslips", "Offer letter of last employer"];
+export const DOC_ITEM_STATUS = { pending: { label: "Pending", tone: "neutral" }, received: { label: "Received", tone: "info" }, verified: { label: "Verified", tone: "good" }, mismatch: { label: "Mismatch / tampered", tone: "bad" }, na: { label: "Not applicable", tone: "neutral" } };
+export const CHECK_FIELDS = {
+  pf: [
+    ["uan", "UAN (12 digits)", "text"],
+    ["establishment", "Last establishment in EPFO", "text"],
+    ["member_id", "PF member ID", "text"],
+    ["epfo_from", "Contributions from", "date"],
+    ["epfo_to", "Last contribution", "date"],
+    ["result", "EPFO vs declared history", "select", [["match", "Matches declared history"], ["gap", "Gap in contributions"], ["mismatch", "Employer or dates differ"], ["dual", "Overlapping (dual) employment"], ["no_pf", "No PF record (exempt / small employer)"]]],
+  ],
+  address: [
+    ["method", "Method", "select", [["physical", "Physical field visit"], ["digital", "Digital (geo-tagged, candidate app)"], ["postal", "Postal / courier"]]],
+    ["address_type", "Address", "select", [["current", "Current address"], ["permanent", "Permanent address"], ["both", "Current and permanent"]]],
+    ["agent", "Field agent", "text"],
+    ["visit_date", "Visit date", "date"],
+    ["outcome", "Visit outcome", "select", [["confirmed", "Stays at address – confirmed"], ["short_stay", "Confirmed – shorter stay than declared"], ["not_found", "Address not found"], ["moved", "Moved out"], ["locked", "House locked – revisit"], ["refused", "Respondent refused"]]],
+    ["respondent", "Respondent (name · relation)", "text"],
+    ["stay_since", "Staying since", "text"],
+    ["geo", "Geo-tag (lat, lng)", "text"],
+  ],
+  company_email: [
+    ["employer", "Previous employer", "text"],
+    ["hr_name", "Employer HR contact", "text"],
+    ["hr_email", "HR official email", "email"],
+    ["sent_on", "Email sent on", "date"],
+    ["response", "Employer response", "select", [["confirmed", "Confirmed – details match"], ["dates_differ", "Dates differ"], ["designation_differs", "Designation differs"], ["not_eligible_rehire", "Not eligible for rehire"], ["no_response", "No response after reminders"]]],
+    ["response_on", "Response on", "date"],
+  ],
+};
+const DEFAULT_FIELDS = [["vendor_ref", "Vendor reference", "text"], ["source", "Verified with / source", "text"]];
+export const fieldsOf = (type) => (type === "documents" ? DEFAULT_FIELDS.slice(1) : CHECK_FIELDS[type] || DEFAULT_FIELDS);
+
+const FREE_MAIL = /@(gmail|googlemail|yahoo|ymail|outlook|hotmail|live|msn|rediffmail|icloud|me|aol|proton|protonmail|zoho|gmx|yandex|mail)\.[a-z.]+$/i;
+/** Is this email on a company's own domain (not a free mailbox)? */
+export function officialEmailCheck(email) {
+  const s = String(email || "").trim().toLowerCase();
+  if (!s) return { ok: false, text: "No email yet" };
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(s)) return { ok: false, text: "Not a valid email address" };
+  if (FREE_MAIL.test(s)) return { ok: false, text: "Free mailbox – not accepted; use the employer's own domain" };
+  return { ok: true, text: `Official domain · ${s.split("@")[1]}` };
+}
+
+// ── Overall tracker for a case ───────────────────────────
+export const CASE_STEPS = [["initiated", "Initiated"], ["consent", "Consent signed"], ["started", "Started"], ["verification", "Verification"], ["review", "HR review"], ["closed", "Cleared / closed"]];
+/** Index into CASE_STEPS for where a case is now. */
+export function bgvStep(c) {
+  if (!c) return -1;
+  if (c.closed_status) return 5;
+  if (c.consent?.status !== "given") return 0;
+  const done = c.checks.filter((k) => CHECK_DONE.includes(k.status)).length;
+  if (done === c.checks.length) return 4;
+  if (!done && c.checks.every((k) => stageIndex(k) <= 0)) return 2;
+  return 3;
+}
 
 /** Overall case status from its checks (a closed decision wins). */
 export function bgvStatus(c) {
@@ -49,16 +142,19 @@ export function bgvStatus(c) {
   if (c.closed_status) return c.closed_status;
   if (c.cancelled) return "cancelled";
   if (c.consent?.status !== "given") return c.initiated_at ? "consent_pending" : "not_started";
+  if (c.on_hold) return "on_hold";
   const st = c.checks.map((k) => k.status);
   if (st.includes("discrepancy")) return "discrepancy";
   if (st.includes("insufficient")) return "insufficient";
-  if (st.every((s) => s === "verified" || s === "na")) return "clear";
+  if (st.every((s) => CHECK_DONE.includes(s))) return "review";
+  if (bgvStep(c) === 2) return "started";
   return "in_progress";
 }
 export function bgvProgress(c) {
   if (!c?.checks?.length) return 0;
-  const done = c.checks.filter((k) => ["verified", "na", "discrepancy"].includes(k.status)).length;
-  return Math.round((done / c.checks.length) * 100);
+  // Each check counts by how far along its own steps it is, so the bar moves before checks finish.
+  const part = c.checks.map((k) => (CHECK_DONE.includes(k.status) ? 1 : Math.max(0, stageIndex(k)) / (stagesOf(k.type).length - 1)));
+  return Math.round((part.reduce((a, b) => a + b, 0) / c.checks.length) * 100);
 }
 export const bgvFor = (data, empCode) => (data.bgv || []).filter((c) => c.employee_code === empCode && !c.cancelled).sort((a, b) => String(b.initiated_at).localeCompare(String(a.initiated_at)))[0] || null;
 export const bgvForCandidate = (data, cid) => (data.bgv || []).filter((c) => c.candidate_id === cid && !c.cancelled).sort((a, b) => String(b.initiated_at).localeCompare(String(a.initiated_at)))[0] || null;
