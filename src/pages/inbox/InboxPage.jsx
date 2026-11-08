@@ -9,7 +9,7 @@ import ApprovalsPage from "../requests/ApprovalsPage.jsx";
 import { REQUEST_TYPES, requestSummary } from "../../lib/requests.js";
 import { fmtNum, timeAgo } from "../../lib/utils.js";
 
-export default function InboxPage() {
+export default function InboxPage({ embedded = false }) {
   const { data, user, reportsOf, pendingForManager, nameOf, ruleBy } = useStore();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -25,7 +25,7 @@ export default function InboxPage() {
 
   return (
     <>
-      <PageHeader eyebrow="INBOX" title="Inbox" subtitle={isManager ? `${p.requests.length + p.points.length} item(s) from your team need your approval.` : "Track every request you have made and who it is waiting with."} />
+      {!embedded && <PageHeader eyebrow="INBOX" title="Inbox" subtitle={isManager ? `${p.requests.length + p.points.length} item(s) from your team need your approval.` : "Track every request you have made and who it is waiting with."} />}
       <Box sx={{ mb: 2, borderBottom: "1px solid #e5eae4" }}>
         <Tabs value={view} onChange={(_, v) => setView(v)}>
           {isManager && <Tab value="approvals" label={`Team approvals (${p.requests.length + p.points.length})`} sx={{ fontSize: "0.7rem" }} />}

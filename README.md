@@ -1,4 +1,37 @@
-# ONAS PeopleHub v8.8 — hours calendar & granular reports · v8.7 — worker types, contract management, payslip design studio · v8 — BGV, applicant tracking, compliance calendar, chat, client meetings and AI scheduling
+# ONAS PeopleHub v10.0 — all-in-one HR & payroll · v8.8 — hours calendar & granular reports · v8.7 — worker types, contract management, payslip design studio · v8 — BGV, applicant tracking, compliance calendar, chat, client meetings and AI scheduling
+
+### v10.1 — Inbox & notifications in one place
+
+One sidebar item, **Inbox & notifications**, for every role, with two tabs: **Inbox** (employees: team approvals + my
+requests; admins: approvals for their modules; Super Admin: requests needing sign-off) and **Notifications** (with
+mark-all-read and unread filter). The sidebar badge adds both counts. `/inbox` and `/notifications` both still work and open
+the matching tab, so the bell, notification links and AI shortcuts are unchanged. File: `src/pages/inbox/InboxHub.jsx`.
+
+### v10.0 — All-in-one HR & payroll: Payroll Agent, compliance autopilot and everything around it
+
+v10 closes every gap in the "simple all-in-one HR and payroll" checklist without changing the existing design or removing
+any feature. New screens use the same layout as the reference modules (header → tab row → AI brief strip with one-tap
+actions → KPI tiles → cards) and the Ezyo palette. Super Admin → **Feature coverage** (`/coverage`) maps every checklist
+point to its screen and lists what each role gets. Full list: `FEATURE-COVERAGE.md`.
+
+| Area | Screens (route) | Who |
+|---|---|---|
+| **Payroll Agent** | Run (`/payroll-agent`) · Variable pay (`/variable-pay`) · Bank payouts (`/payouts`) · Filings & year-end (`/filings`) · Global & FX (`/global-payroll`) | Finance, Super Admin |
+| **Compliance autopilot** | Health (`/compliance-autopilot`) · Deadlines & alerts (`/compliance-alerts`) · Rule updates (`/rule-updates`) · Audit pack & trail (`/audit-pack`) · Data privacy (`/privacy-center`) | Finance, HR (compliance), Super Admin |
+| **Offboarding** | Exits & F&F settlement (`/exits`) · Resignation & exit (`/my-exit`) | HR, Finance, Super Admin · Employee |
+| **Time** | Live board (`/live-board`) · Shift roster (`/shifts`) · Timesheets → payroll (`/timesheets`) · Leave rule-sets, 52 controls (`/leave-rules`) · My shifts (`/my-shifts`) | HR, Finance, Super Admin · Employee |
+| **People experience** | PeopleXP — feed, recognition, pulse, vouchers, insights (`/people-xp`) · Mobile app (`/my-app`) | Everyone |
+| **Global & spend** | Global hiring — EOR, CoR, contractors, cost calculator (`/global-hiring`) · Relocation & visas (`/relocation`, `/my-relocation`) · Spend cards (`/spend-cards`, `/my-card`) | Finance, HR, Super Admin · Employee |
+| **Platform** | Integrations & API (`/integrations`) · Workforce intelligence (`/insights`) · Setup & data import (`/setup`) · Plan & billing (`/billing`) · Security & backups (`/security`) · Expert support (`/expert-support`) · Privacy & my data (`/my-privacy`) | Super Admin, Finance · Employee |
+
+India payroll now also deducts **Labour Welfare Fund** (Telangana, Karnataka, Maharashtra) and pays **hourly, bonus and
+commission** through the engine. All v10 data lives in `data.suite` (`src/data/seedSuite.js`); every change goes through
+`suiteDo()` in `src/store/suiteActions.js`, which checks the role / module and writes the audit log.
+
+Files: `src/pages/suite/*` (PayrollAgent, ComplianceAutopilot, Exits, Workforce, LeaveRules, PeopleXP, GlobalTeams, Platform,
+Coverage), `src/components/suite/Hub.jsx`, `src/lib/suitePayroll.js`, `src/store/suiteActions.js`, `src/data/seedSuite.js`;
+changed `src/lib/payroll/in.js`, `src/data/roleNav.js`, `src/PeopleHubApp.jsx`, `src/components/PortalShell.jsx`, `src/store/AppStore.jsx`, `src/data/seed.js`.
+
 
 v8 adds six modules on top of v7 without removing any feature. Every module uses generative AI (Claude) and still works
 offline: each AI button computes an answer from your real data first, and the live model only writes the narrative.
@@ -276,10 +309,18 @@ Public holidays are for 2026; Islamic holidays are marked "date may move".
 Also in the data: Lerato Mokoena (EMP031, South Africa), Chinedu Okafor (EMP033, Nigeria), Kagiso Molefe (EMP034, Botswana), and offices
 (geofences) in Windhoek, Johannesburg, Nairobi, Lagos and Gaborone. Browsers that already hold v5 data get these added automatically.
 
-### ONAS brand
+### Ezyo brand colours
 
-`brand/onasBrandPlugin.mjs` is a Vite plugin that re-skins colours at build time: the old forest-green palette is mapped to the ONAS palette,
-so the original source keeps its colours. Run `ONAS_BRAND=off npm run dev` to see the original PeopleHub colours.
+`brand/ezyoBrandPlugin.mjs` is a Vite plugin that re-skins colours at build time: the old forest-green palette is mapped to the Ezyo palette,
+so the original source keeps its colours. Run `EZYO_BRAND=off npm run dev` to see the original PeopleHub colours.
+
+| Role | Colour | Used for |
+|---|---|---|
+| Major dark teal | `#004A77` | primary buttons, active nav, headings accents, sidebar, banners |
+| Glob colour (orange, from the EzyGlob wordmark) | `#F48A3E` | secondary colour, badge counts, notification dot, banner highlights, AI gradient |
+| Bright teal | `#10FCBE` (deep shade `#0A9E78` for text on white) | highlight buttons on dark surfaces, success states, charts, links, gradient ends |
+
+Warning (amber), error (red) and info (blue) colours are kept so status meaning stays clear.
 
 ### Files
 
@@ -290,9 +331,9 @@ NEW  src/country/CountrySwitcher.jsx   header country selector
 NEW  src/country/CountryWorkspace.jsx  Country workspace / My country rules page, calculator, automations
 NEW  src/country/AiPageLocalizer.jsx   AI translation of every string on screen
 NEW  src/country/aiCountry.js          country rules added to every AI prompt
-NEW  src/country/brand.js              ONAS colour tokens
+NEW  src/country/brand.js              Ezyo colour tokens
 NEW  src/lib/payroll/{na,za,ke,ng,bw}.js   country payroll engines
-NEW  brand/onasBrandPlugin.mjs         build-time ONAS colour mapping
+NEW  brand/ezyoBrandPlugin.mjs         build-time Ezyo colour mapping
 ```
 
 Existing files were only wired up (138 changed lines across 21 files, no feature removed): engine registration (`payroll/index.js`),
