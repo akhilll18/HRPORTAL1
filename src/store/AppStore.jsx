@@ -15,6 +15,8 @@ import { makePayrollSuiteActions } from "./payrollSuiteActions.js";
 import { makeSuiteActions } from "./suiteActions.js";
 import { makeContractActions } from "./contractActions.js";
 import { makePayslipDesignActions } from "./payslipDesignActions.js";
+import { makeEntityActions } from "./entityActions.js";
+import { ALL, allowedEntities, scopeData, scopeLocationIds, defaultEntityFor } from "../data/entities.js";
 import { CONTRACT_COMPONENT_CODES } from "../data/payslipFields.js";
 import { isoDate } from "../lib/utils.js";
 import { validateEmployee, isContingent, monthlyEquivalent, workerTypeOf } from "../data/employeeFields.js";
@@ -34,7 +36,7 @@ function loadData() {
       // Fill any collections added since this browser saved its copy.
       if (parsed?.version === 3) {
         const fresh = clone(buildSeed());
-        return migrateV88b(migrateV88(migrateV87(migrateV8(withCountryData({ ...fresh, ...parsed, settings: { ...fresh.settings, ...parsed.settings } }, fresh)), fresh)));
+        return migrateV101(migrateV88b(migrateV88(migrateV87(migrateV8(withCountryData({ ...fresh, ...parsed, settings: { ...fresh.settings, ...parsed.settings } }, fresh)), fresh))), parsed);
       }
     }
   } catch {
@@ -64,6 +66,19 @@ function migrateV88(d) {
     admins: d.admins.map((a) => ({ ...a, modules: (a.modules || []).filter((m) => m !== "points" && !(a.admin_code === "ADM02" && (m === "it" || m === "bgv"))) })),
     itTickets: (d.itTickets || []).map((t) => (t.assigned_to === "ADM02" ? { ...t, assigned_to: "SA001" } : t)),
     bgvAccess: (d.bgvAccess || []).map((g) => (g.code === "ADM02" && !g.revoked ? { ...g, revoked: true, revoked_at: new Date().toISOString(), revoked_by: "SYSTEM" } : g)),
+  };
+}
+// v10.2: companies & locations, and the expense hub, for browsers holding older data.
+function migrateV101(d, parsed) {
+  if (d.v101) return d;
+  const locs = Array.isArray(d.workLocations) ? d.workLocations : [];
+  const hub = parsed?.expenseHub ? d.expenseHub : { connections: {}, runs: [], exceptions: [], categoryMaps: {} };
+  return {
+    ...d,
+    v101: true,
+    expenseHub: hub,
+    thirdPartyExpenses: parsed?.thirdPartyExpenses || d.thirdPartyExpenses || [],
+    employees: d.employees.map((e) => (e.company_id && e.location_id ? e : { ...e, ...defaultEntityFor(e, locs.length ? locs : undefined) })),
   };
 }
 // v8.8b: drop leftover Sahayog points notifications (their pages no longer exist).
@@ -194,6 +209,45 @@ export function AppStoreProvider({ children }) {
     const rec = listFor(data, session.role).find((r) => codeOf(session.role, r) === session.code);
     return rec ? { ...rec, role: session.role, code: session.code } : null;
   }, [session, data]);
+
+  // ── COMPANY & LOCATION SCOPE ─────────────────────────
+  // Admins and the Super Admin pick a company and location in the header; every page then reads data narrowed to it.
+  // Admins can also be limited to some companies / locations (Companies & locations → Admin access).
+  const scopeKey = (code) => `${APP_CONFIG.storageKey}-entity-${code || "anon"}`;
+  const readScope = (code) => {
+    try {
+      const v = JSON.parse(localStorage.getItem(scopeKey(code)) || "null");
+      return v && typeof v === "object" ? { company: v.company || ALL, location: v.location || ALL } : { company: ALL, location: ALL };
+    } catch {
+      return { company: ALL, location: ALL };
+    }
+  };
+  const [entityScope, setEntityScopeState] = useState(() => readScope(session?.code));
+  useEffect(() => setEntityScopeState(readScope(session?.code)), [session?.code]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setEntityScope = useCallback((next) => {
+    setEntityScopeState((cur) => {
+      const v = { ...cur, ...next };
+      if (next.company && next.company !== cur.company && !("location" in next)) v.location = ALL;
+      try {
+        localStorage.setItem(scopeKey(sessionRef.current?.code), JSON.stringify(v));
+      } catch {
+        /* storage disabled */
+      }
+      return v;
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const scopeIds = useMemo(() => {
+    if (!user || user.role === "emp") return null;
+    const companies = data.companies || [];
+    const locations = data.workLocations || [];
+    if (!companies.length || !locations.length) return null;
+    const allowed = allowedEntities(user, companies, locations);
+    // A remembered choice the user may no longer see falls back to everything they are allowed.
+    const s = { company: allowed.companies.some((c) => c.company_id === entityScope.company) ? entityScope.company : ALL, location: allowed.locations.some((l) => l.location_id === entityScope.location) ? entityScope.location : ALL };
+    return scopeLocationIds(s, user, companies, locations);
+  }, [user, data.companies, data.workLocations, entityScope]);
+  const scopedData = useMemo(() => scopeData(data, scopeIds), [data, scopeIds]);
+  const entityAccess = useMemo(() => allowedEntities(user, data.companies || [], data.workLocations || []), [user, data.companies, data.workLocations]);
 
   // ── AUTH ─────────────────────────────────────────────
   function completeLogin(p) {
@@ -580,6 +634,8 @@ export function AppStoreProvider({ children }) {
           request_id: id,
           type,
           employee_code: me.employee_code,
+          company_id: me.company_id,
+          location_id: me.location_id,
           status: "Pending",
           stage: mgr ? "manager" : "admin",
           flags: v.flags || [],
@@ -879,6 +935,11 @@ export function AppStoreProvider({ children }) {
       const base = isNew ? {} : d.employees.find((e) => e.employee_code === code);
       const merged = { ...base, ...rec, employee_code: code, login_id: (rec.login_id || rec.email || "").trim().toLowerCase() };
       merged.worker_type = workerTypeOf(merged);
+      // Company follows the location; new staff default to the location chosen in the header, else their country's office.
+      if (!merged.location_id && isNew && entityScope.location !== ALL) merged.location_id = entityScope.location;
+      const loc = (d.workLocations || []).find((l) => l.location_id === merged.location_id);
+      if (loc) merged.company_id = loc.company_id;
+      else if (d.workLocations?.length) Object.assign(merged, defaultEntityFor(merged, d.workLocations));
       // Contingent workers: monthly gross is the monthly equivalent of the contract rate, so CTC, budgets and analytics stay right.
       if (isContingent(merged)) merged.monthly_gross = monthlyEquivalent(merged);
       const errors = validateEmployee(merged, { role: role === "admin" ? "super" : role, employees: d.employees });
@@ -898,7 +959,7 @@ export function AppStoreProvider({ children }) {
         return { ok: true, code };
       });
     },
-    [session, mutate],
+    [session, mutate, entityScope],
   );
   const removeEmployee = useCallback(
     (code) =>
@@ -1150,6 +1211,7 @@ export function AppStoreProvider({ children }) {
   const suiteOps = useMemo(() => makeSuiteActions({ mutate, dataRef, sessionRef, pushAudit, pushNote }), [mutate]);
   const contractOps = useMemo(() => makeContractActions({ mutate, dataRef, sessionRef, pushAudit, pushNote }), [mutate]);
   const designOps = useMemo(() => makePayslipDesignActions({ mutate, dataRef, sessionRef, pushAudit, pushNote }), [mutate]);
+  const entityOps = useMemo(() => makeEntityActions({ mutate, dataRef, sessionRef, pushAudit, pushNote, adminFor }), [mutate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const value = {
     ...ops,
@@ -1162,7 +1224,10 @@ export function AppStoreProvider({ children }) {
     ...suiteOps,
     ...contractOps,
     ...designOps,
-    data, session, user, pending, toast, setToast, notifyToast, logoutReason, rememberedLogin, fingerprint: fp, device, ...helpers,
+    ...entityOps,
+    // `data` is narrowed to the company / location chosen in the header; `allData` is everything.
+    data: scopedData, allData: data, entityScope, setEntityScope, entityAccess, scopeIds,
+    session, user, pending, toast, setToast, notifyToast, logoutReason, rememberedLogin, fingerprint: fp, device, ...helpers,
     beginLogin, resendOtp, verifyMfa, completeReset, cancelPending, logout, touch,
     saveSubmission, withdrawSubmission, deleteDraft, managerDecidePoints, redeem,
     createRequest, cancelRequest, decideRequest, bulkDecideRequests, payoutRequest,

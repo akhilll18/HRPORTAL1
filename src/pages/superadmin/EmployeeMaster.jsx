@@ -15,7 +15,7 @@ const FX = { INR: 1, GBP: 112, USD: 88, AED: 24, SGD: 68 };
 const newRecord = () => ({ worker_type: "permanent", country_code: "IN", region: "TG", city: "Hyderabad", employment_type: "full_time", fte: "1", pay_cycle: "monthly", tax_regime: "new", leave_policy: "standard", expense_policy: "standard", shift: "general", probation_status: "in_probation", background_check: "pending", right_to_work: "pending", notice_period: "60", date_of_joining: isoDate(), bank_name: "", grade_code: "P1" });
 
 export function EmployeeFormDialog({ open, rec, onClose }) {
-  const { data, user, upsertEmployee, createContractFromEmployee, notifyToast } = useStore();
+  const { data, user, upsertEmployee, createContractFromEmployee, notifyToast, entityAccess } = useStore();
   const isNew = !rec?.employee_code;
   const [form, setForm] = useState(() => rec || newRecord());
   const [tab, setTab] = useState("core");
@@ -30,7 +30,7 @@ export function EmployeeFormDialog({ open, rec, onClose }) {
     }
   }, [open, rec]);
   const role = user.role === "superadmin" ? "super" : "admin";
-  const ctx = { orgUnits: data.orgUnits, employees: data.employees, geofences: data.geofences || [], vendors: data.contractVendors || [] };
+  const ctx = { orgUnits: data.orgUnits, employees: data.employees, geofences: data.geofences || [], vendors: data.contractVendors || [], companies: entityAccess?.companies || data.companies || [], locations: entityAccess?.locations || data.workLocations || [] };
   const sections = EMPLOYEE_SECTIONS.filter((s) => sectionApplies(s, form));
   const sec = sections.find((s) => s.id === tab) || sections[0];
   const errCount = (s) => s.fields.filter((f) => errors[f.key]).length;
@@ -119,7 +119,7 @@ export function EmployeeFormDialog({ open, rec, onClose }) {
             const editable = isNew ? true : f.editableBy.includes(role) || (role === "super" && f.editableBy.length > 0);
             return (
               <Box key={f.key} sx={{ gridColumn: f.type === "textarea" ? "1 / -1" : undefined }}>
-                <FieldInput f={f} rec={form} ctx={ctx} value={form[f.key]} disabled={!editable} error={errors[f.key]} onChange={(v) => setForm((x) => ({ ...x, [f.key]: v, ...(f.key === "country_code" ? { region: "" } : {}), ...(f.key === "gst_registered" && v === "no" ? { gstin: "" } : {}) }))} />
+                <FieldInput f={f} rec={form} ctx={ctx} value={form[f.key]} disabled={!editable} error={errors[f.key]} onChange={(v) => setForm((x) => ({ ...x, [f.key]: v, ...(f.key === "country_code" ? { region: "" } : {}), ...(f.key === "company_id" ? { location_id: "" } : {}), ...(f.key === "location_id" ? { company_id: (ctx.locations.find((l) => l.location_id === v) || {}).company_id || x.company_id } : {}), ...(f.key === "gst_registered" && v === "no" ? { gstin: "" } : {}) }))} />
               </Box>
             );
           })}
@@ -144,7 +144,7 @@ export default function EmployeeMaster() {
   const [wtype, setWtype] = useState("");
   const [edit, setEdit] = useState(null);
   const inCountry = useCountryFilter();
-  const list = useMemo(() => data.employees.filter((e) => inCountry(e) && (!dept || e.department === dept) && (!status || e.status === status) && (!wtype || (wtype === "contingent" ? isContingent(e) : workerTypeOf(e) === wtype)) && (!q || [e.full_name, e.employee_code, e.designation, e.city, e.email].join(" ").toLowerCase().includes(q.toLowerCase()))), [data.employees, q, dept, status, wtype, inCountry]);
+  const list = useMemo(() => data.employees.filter((e) => inCountry(e) && (!dept || e.department === dept) && (!status || e.status === status) && (!wtype || (wtype === "contingent" ? isContingent(e) : workerTypeOf(e) === wtype)) && (!q || [e.full_name, e.employee_code, e.designation, e.city, e.email, e.location_id, e.company_id].join(" ").toLowerCase().includes(q.toLowerCase()))), [data.employees, q, dept, status, wtype, inCountry]);
   const tenure = (d) => ((Date.now() - new Date(d)) / (365.25 * 86400000)).toFixed(1);
   const probation = (e) => (Date.now() - new Date(e.date_of_joining)) / 86400000 < 183;
 
@@ -202,7 +202,7 @@ export default function EmployeeMaster() {
                   <TableCell><PersonCell name={e.full_name} sub={`${e.employee_code} · ${e.designation}`} /></TableCell>
                   <TableCell>{e.department}</TableCell>
                   <TableCell>{e.reporting_manager ? nameOf(e.reporting_manager) : "—"}</TableCell>
-                  <TableCell>{e.city} · {e.country_code}</TableCell>
+                  <TableCell><Typography sx={{ fontSize: "0.68rem", fontWeight: 600 }}>{(data.workLocations || []).find((l) => l.location_id === e.location_id)?.name || e.city}</Typography><Typography sx={{ fontSize: "0.58rem", color: "#78827b" }}>{(data.companies || []).find((c) => c.company_id === e.company_id)?.short || "—"} · {e.country_code}</Typography></TableCell>
                   <TableCell><Mono>{e.grade_code || "—"}</Mono></TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap" }}>{fmtDate(e.date_of_joining)}</TableCell>
                   <TableCell align="right">{tenure(e.date_of_joining)}</TableCell>

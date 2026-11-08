@@ -10,6 +10,8 @@ import { buildContractSeed } from "./seedContracts.js";
 import { buildPayslipDesignSeed } from "./payslipDesign.js";
 import { buildPayslipSeed, buildOfferSeed } from "./seedPayslips.js";
 import { DEFAULT_OFFER_COMPANY } from "./offerFields.js";
+import { COMPANIES, LOCATIONS, defaultEntityFor } from "./entities.js";
+import { applyImport, demoFeed } from "../lib/expenseHub.js";
 
 export const APP_CONFIG = {
   productName: "PeopleHub",
@@ -522,10 +524,39 @@ export const HR_FEED = [
   emp("EMP017", "Imran Khan", "Data Migration", "Data Engineer", "EMP009", 0, "P2", 92000, { status: "pending_approval", must_reset: true, password_hash: HASH["Welcome@123"] }),
 ];
 
+// Third-party (non-employee) expenses booked against a company and location: vendors, agencies, facility partners.
+function thirdPartySeed() {
+  return [
+    { id: "TPE-0001", payee: "Swift Facility Services", title: "Housekeeping & pantry supplies – October", date: dIso(-12), category: "SUPPLY", currency: "INR", amount: 42800, amount_inr: 42800, company_id: "ONAS-IN", location_id: "IN-HYD-WH", status: "Booked", source: { app: "manual", external_id: "INV-SFS-1188" }, lines: [] },
+    { id: "TPE-0002", payee: "TeamLease (agency staff travel)", title: "Agency staff travel – Medchal deployment", date: dIso(-8), category: "TRAVEL", currency: "INR", amount: 15600, amount_inr: 15600, company_id: "ONAS-IN", location_id: "IN-HYD-HQ", status: "Pending", source: { app: "manual", external_id: "TL-77812" }, lines: [] },
+    { id: "TPE-0003", payee: "Regus Canary Wharf", title: "Meeting room hire – client QBR", date: dIso(-15), category: "CLIENT", currency: "GBP", amount: 380, amount_inr: 380 * 112, company_id: "ONAS-UK", location_id: "GB-LDN", status: "Booked", source: { app: "manual", external_id: "RG-44120" }, lines: [] },
+    { id: "TPE-0004", payee: "Bolt Business Kenya", title: "Contractor rides – Nairobi rollout", date: dIso(-6), category: "LOCAL", currency: "KES", amount: 24000, amount_inr: Math.round(24000 * 0.68), company_id: "ONAS-AF", location_id: "KE-NBO", status: "Booked", source: { app: "manual", external_id: "BOLT-5521" }, lines: [] },
+  ];
+}
+
 export function buildSeed() {
+  // Every employee belongs to a company (legal entity) and a location.
+  employees.forEach((e) => Object.assign(e, e.company_id && e.location_id ? {} : defaultEntityFor(e)));
+  HR_FEED.forEach((e) => Object.assign(e, e.company_id && e.location_id ? {} : defaultEntityFor(e)));
   const ops = buildOps({ employees, orgUnits });
+  const base = buildSeedBase(ops);
+  base.requests = base.requests.map((r) => {
+    const e = employees.find((x) => x.employee_code === r.employee_code);
+    return e ? { ...r, company_id: e.company_id, location_id: e.location_id } : r;
+  });
+  // Two apps already connected, so the expense hub opens with imported claims, card spends and advances.
+  base.expenseHub = { connections: { concur: { connected: true, landing: "trust", auto_sync: true, connected_at: daysAgo(30, 10) }, mmt_mybiz: { connected: true, landing: "review", auto_sync: false, connected_at: daysAgo(20, 10) } }, runs: [], exceptions: [], categoryMaps: { concur: { "Ground transport": "LOCAL" } } };
+  base.thirdPartyExpenses = thirdPartySeed();
+  for (const app of ["concur", "mmt_mybiz"]) applyImport(base, app, demoFeed(app, 1, base.employees, isoDate()), { actor: "SYSTEM", adminFor: () => "ADM02" });
+  base.expenseHub.runs.forEach((r, i) => { r.at = daysAgo(1 + i, 9); });
+  return base;
+}
+
+function buildSeedBase(ops) {
   return {
     version: 3,
+    companies: COMPANIES.map((c) => ({ ...c })),
+    workLocations: LOCATIONS.map((l) => ({ ...l })),
     orgUnits,
     employees,
     admins,

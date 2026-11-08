@@ -23,13 +23,13 @@ function display(f, rec, ctx) {
 }
 
 export default function ProfilePage() {
-  const { user, data, nameOf, updateProfile, notifyToast, reportsOf } = useStore();
+  const { user, data, nameOf, updateProfile, notifyToast, reportsOf, entityAccess } = useStore();
   const [section, setSection] = useState("core");
   const [draft, setDraft] = useState({});
   const [errors, setErrors] = useState({});
   const fileRef = useRef(null);
   const navigate = useNavigate();
-  const ctx = { orgUnits: data.orgUnits, employees: data.employees, geofences: data.geofences || [], vendors: data.contractVendors || [] };
+  const ctx = { orgUnits: data.orgUnits, employees: data.employees, geofences: data.geofences || [], vendors: data.contractVendors || [], companies: entityAccess?.companies || data.companies || [], locations: entityAccess?.locations || data.workLocations || [] };
   const mySections = EMPLOYEE_SECTIONS.filter((s) => sectionApplies(s, user)).map((s) => ({ ...s, fields: s.fields.filter((f) => fieldApplies(f, user)) }));
   const sec = mySections.find((s) => s.id === section);
   const allFields = mySections.flatMap((s) => s.fields).filter((f) => f.type !== "calc");

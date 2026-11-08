@@ -6,7 +6,9 @@ import { REGIONS, COUNTRIES, isRequired, RATE_UNIT } from "../../data/employeeFi
 const SYMBOL = { INR: "₹", GBP: "£", USD: "$", EUR: "€", AED: "AED", SGD: "S$" };
 export const currencySymbol = (rec) => { const c = COUNTRIES.find((x) => x.code === (rec?.country_code || "IN"))?.currency || "INR"; return SYMBOL[c] || c; };
 
-export function fieldOptions(f, rec, { orgUnits, employees, geofences = [], vendors = [] }) {
+export function fieldOptions(f, rec, { orgUnits, employees, geofences = [], vendors = [], companies = [], locations = [] }) {
+  if (f.options === "companies") return [["", "Choose a company"], ...companies.filter((c) => c.status !== "inactive" || c.company_id === rec.company_id).map((c) => [c.company_id, `${c.short} · ${c.name}`])];
+  if (f.options === "locations") return [["", "Choose a location"], ...locations.filter((l) => (!rec.company_id || l.company_id === rec.company_id) && (l.status !== "inactive" || l.location_id === rec.location_id)).map((l) => [l.location_id, `${l.name}${l.city ? ` · ${l.city}` : ""}`])];
   if (f.options === "vendors") return [["", "Choose a vendor"], ...vendors.filter((v) => v.status !== "inactive").map((v) => [v.id, `${v.name} · markup ${v.markup_pct}%`])];
   if (f.options === "geofences") return geofences.map((g) => [g.id, g.name]);
   if (f.options === "departments") return orgUnits.map((o) => [o.org_unit_id, o.name]);

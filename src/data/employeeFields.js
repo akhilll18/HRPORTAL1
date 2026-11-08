@@ -154,6 +154,8 @@ export const EMPLOYEE_SECTIONS = [
       { key: "country_code", label: "Country", type: "select", options: COUNTRIES.map((c) => [c.code, c.name]), control: "Dropdown", rule: "Set when the employee is created; drives payroll rules and currency.", editableBy: ["super"], required: true },
       { key: "region", label: "Work state / region", type: "select", options: "regions", control: "Dropdown", rule: "Required for payroll in IN and US (professional tax / state tax).", editableBy: ["super"], required: true },
       { key: "city", label: "Work location (city)", type: "text", control: "Text input", rule: "Max 80 characters.", max: 80, editableBy: ["super", "admin"], required: true },
+      { key: "company_id", label: "Company (legal entity)", type: "select", options: "companies", control: "Dropdown", rule: "The legal entity that employs the person. Drives company / location segregation across the app (header picker), payroll entity and expense booking.", editableBy: ["super", "admin"] },
+      { key: "location_id", label: "Location / branch", type: "select", options: "locations", control: "Dropdown", rule: "Office, branch or warehouse of the chosen company. The company follows the location.", editableBy: ["super", "admin"] },
       { key: "status", label: "Account status", type: "text", control: "Read-only", rule: "active · pending_approval · locked · suspended · rejected. Changed from Users & access.", editableBy: [] },
     ],
   },

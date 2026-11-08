@@ -1,4 +1,50 @@
-# ONAS PeopleHub v10.0 — all-in-one HR & payroll · v8.8 — hours calendar & granular reports · v8.7 — worker types, contract management, payslip design studio · v8 — BGV, applicant tracking, compliance calendar, chat, client meetings and AI scheduling
+# ONAS PeopleHub v10.2 — companies & locations, expense hub · v10.0 — all-in-one HR & payroll · v8.8 — hours calendar & granular reports · v8.7 — worker types, contract management, payslip design studio · v8 — BGV, applicant tracking, compliance calendar, chat, client meetings and AI scheduling
+
+### v10.2 — Company & location segregation, and the expense hub
+
+**Companies & locations.** Every employee now belongs to a **company** (legal entity) and a **location** (office, branch,
+warehouse…). Six companies and 24 locations are seeded (ONAS India with Hyderabad HQ, Nizampet branch and Shamshabad
+warehouse; ONAS UK & Europe; Americas; Middle East; Africa; Asia Pacific). Admins and the Super Admin get a
+**Company · Location** picker in the header, next to the country picker. Choosing a company or a single location narrows
+the *whole application*: the store hands every page a scoped copy of the data (employees, every record that carries an
+`employee_code`, maps keyed by employee code, geofences, and records stamped with a company / location), so people, approvals,
+attendance, live location, payroll, payslips, contracts, expenses, analytics and reports all follow it without page changes.
+Actions still work on the full data. **Companies & locations** (`/companies`) lists entities and locations with headcount
+and payroll, lets the Super Admin add or edit them, lets HR move staff between locations (the company follows the location),
+and has **Admin access**: limit an admin to some companies or locations, after which they see only those and the header picker
+offers only those. The employee form has *Company* and *Location* fields; new requests are stamped with both.
+
+**Expense hub** (`/expense-hub`, Finance with the expense / advance / payroll module, and Super Admin) brings in employee
+expenses, company-paid travel-desk bookings, corporate-card spends and advances from other apps — SAP Concur, Zoho Expense,
+Expensify, Happay, Fyle, Rydoo, Navan, MakeMyTrip myBiz, Uber for Business, American Express Corporate, Ramp, Oracle NetSuite,
+Microsoft Dynamics 365 and Tally Prime — or from a CSV file / the API.
+- Records are matched to an employee by code, then work email, then name, converted to ₹ at the stored FX rate (the original
+  currency is kept) and booked to that employee's company and location. They become normal PeopleHub expense / advance
+  requests, so they show in *All approvals*, the employee's *Expenses & travel* page and payroll.
+- Per app: *keep the decision made in the other app* (approved → Approved, reimbursed → Paid) or *send everything to Finance*.
+  Re-syncs are de-duplicated by app + external ID and pick up status changes (the approval chain is updated too).
+- **Duplicates across apps** (same person, date and amount already in PeopleHub) are flagged and held for Finance.
+- **Third-party expenses**: spends for people not on the employee master (agency staff paid through their vendor,
+  consultants' firms, facility partners) are booked against a company and location. Agency, contract and freelance workers
+  who *are* on the master are shown as "Third-party / contingent" in the register.
+- **Exceptions**: records that match no employee wait here to be mapped to an employee, booked as third-party, or dismissed.
+- Tabs: *By company & location* (split by company, location, source app, or employees vs third party, with export),
+  *Register* (filters, CSV export with cost centres), *Connected apps* (connect, sync, landing mode, hourly sync, category
+  mapping), *Import file* (template, preview, validation), *Third-party*, *Exceptions*, *Sync log*.
+
+CSV columns: `external_id, kind, employee_code, employee_email, employee_name, date, category, description, amount, currency,
+title, purpose, project, status, paid_by, vendor, receipt_name, company_id, location_id`. `kind` is expense, advance, card,
+travel or third_party. Lines with the same `external_id` become one claim.
+
+API (server to implement): `GET/POST /api/v1/companies`, `GET/POST /api/v1/locations`, `PUT /api/v1/admins/{code}/entity-scope`,
+`POST /api/v1/expenses/import` (same columns as the CSV, JSON array), `POST /api/v1/expense-apps/{app}/connect|sync|disconnect`,
+`GET /api/v1/expenses/register?company_id=&location_id=`. In this front end the provider calls are simulated by `demoFeed`.
+
+Files: `src/data/entities.js`, `src/lib/expenseHub.js`, `src/store/entityActions.js`, `src/components/EntitySwitcher.jsx`,
+`src/pages/superadmin/CompaniesLocations.jsx`, `src/pages/suite/ExpenseHub.jsx`; changed: `AppStore.jsx` (scope, migration
+v10.2), `seed.js`, `employeeFields.js`, `FieldInput.jsx`, `EmployeeMaster.jsx`, `ProfilePage.jsx`, `Requests.jsx`,
+`ExpensesPage.jsx`, `PortalShell.jsx`, `PeopleHubApp.jsx`, `roleNav.js`, `Coverage.jsx`. Browsers holding older demo data are
+migrated automatically (every employee is given the company and location of their country / city).
 
 ### v10.1 — Inbox & notifications in one place
 

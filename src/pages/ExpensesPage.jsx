@@ -9,6 +9,7 @@ import { PageHeader, SectionCard, StatCard, Grid, Mono, TableWrap, EmptyState, K
 import { RequestDrawer, RequestStatus } from "../components/kit/Requests.jsx";
 import { validateExpense, validateAdvance, expenseTotal } from "../lib/requests.js";
 import { fmtDate, fmtNum, isoDate, readFileAsDataUrl } from "../lib/utils.js";
+import { SOURCE_LABEL } from "../lib/expenseHub.js";
 
 const blankItem = () => ({ date: isoDate(), category: "", description: "", amount: "", receipt: null });
 
@@ -168,9 +169,9 @@ export default function ExpensesPage() {
   const claims = data.requests.filter((r) => r.type === "expense" && r.employee_code === user.employee_code);
   const advances = data.requests.filter((r) => r.type === "advance" && r.employee_code === user.employee_code);
   const y = String(new Date().getFullYear());
-  const claimedYear = claims.filter((c) => c.created_at.startsWith(y) && c.status !== "Cancelled").reduce((s, c) => s + expenseTotal(c.items), 0);
-  const paid = claims.filter((c) => c.status === "Paid").reduce((s, c) => s + (c.approved_amount ?? expenseTotal(c.items)), 0);
-  const pendingAmt = claims.filter((c) => ["Pending", "Approved"].includes(c.status)).reduce((s, c) => s + expenseTotal(c.items), 0);
+  const claimedYear = claims.filter((c) => c.created_at.startsWith(y) && c.status !== "Cancelled" && c.payment_mode !== "company_paid").reduce((s, c) => s + expenseTotal(c.items), 0);
+  const paid = claims.filter((c) => c.status === "Paid" && c.payment_mode !== "company_paid").reduce((s, c) => s + (c.approved_amount ?? expenseTotal(c.items)), 0);
+  const pendingAmt = claims.filter((c) => ["Pending", "Approved"].includes(c.status) && c.payment_mode !== "company_paid").reduce((s, c) => s + expenseTotal(c.items), 0);
   const openAdv = advances.filter((a) => a.status === "Disbursed" && !a.settled).reduce((s, a) => s + a.approved_amount, 0);
 
   return (
@@ -200,7 +201,7 @@ export default function ExpensesPage() {
                   {claims.map((c) => (
                     <TableRow key={c.request_id} hover sx={{ cursor: "pointer" }} onClick={() => setParams({ req: c.request_id })}>
                       <TableCell><Mono>{c.request_id}</Mono></TableCell>
-                      <TableCell><Typography sx={{ fontSize: "0.7rem", fontWeight: 600 }}>{c.title}</Typography><Typography sx={{ fontSize: "0.6rem", color: "#78827b" }}>{c.project || "No project"}</Typography></TableCell>
+                      <TableCell><Typography sx={{ fontSize: "0.7rem", fontWeight: 600 }}>{c.title}</Typography><Typography sx={{ fontSize: "0.6rem", color: "#78827b" }}>{c.project || "No project"}{c.source?.app ? ` · from ${SOURCE_LABEL(c.source.app)}` : ""}{c.payment_mode === "company_paid" ? " · company-paid" : ""}</Typography></TableCell>
                       <TableCell align="right">{c.items.length}</TableCell>
                       <TableCell align="right">₹{fmtNum(expenseTotal(c.items))}</TableCell>
                       <TableCell align="right">{c.approved_amount != null ? `₹${fmtNum(c.approved_amount)}` : "—"}</TableCell>
@@ -224,7 +225,7 @@ export default function ExpensesPage() {
                       <TableCell align="right">₹{fmtNum(a.request_amount)}</TableCell>
                       <TableCell align="right">{a.approved_amount != null ? `₹${fmtNum(a.approved_amount)}` : "—"}</TableCell>
                       <TableCell>{fmtDate(a.disbursed_date)}</TableCell>
-                      <TableCell sx={{ maxWidth: 220 }}><Typography noWrap sx={{ fontSize: "0.65rem" }}>{a.purpose}</Typography></TableCell>
+                      <TableCell sx={{ maxWidth: 220 }}><Typography noWrap sx={{ fontSize: "0.65rem" }}>{a.purpose}</Typography>{a.source?.app && <Typography sx={{ fontSize: "0.56rem", color: "#78827b" }}>from {SOURCE_LABEL(a.source.app)}</Typography>}</TableCell>
                       <TableCell><RequestStatus r={a} /></TableCell>
                     </TableRow>
                   ))}
