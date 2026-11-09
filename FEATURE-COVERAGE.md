@@ -1,4 +1,4 @@
-# PeopleHub v10 — feature coverage
+# PeopleHub v10.2 — feature coverage
 
 Every point of the all-in-one HR & payroll checklist, the screen that delivers it, and who uses it. The same map is in the app under Super Admin → Feature coverage (`/coverage`).
 
@@ -63,6 +63,8 @@ Every point of the all-in-one HR & payroll checklist, the screen that delivers i
 |---|---|---|
 | Accounting (Tally, QuickBooks, Xero, Zoho Books, SAP), banks and ERP | Integrations & API (`/integrations`) | Finance, Super Admin |
 | Dashboards for headcount, payroll cost and attrition | Workforce intelligence (`/insights`), HR analytics (`/analytics`) | Finance, HR, Super Admin |
+| Employee expenses, third-party expenses and advances from other apps (Concur, Zoho Expense, Expensify, Happay, Fyle, Rydoo, Navan, MakeMyTrip myBiz, Uber for Business, Amex, Ramp, NetSuite, Dynamics 365, Tally) or CSV | Expense hub (`/expense-hub`), Expenses & travel (`/expenses`) | Employee, Finance, Super Admin |
+| Everything segregated by company (legal entity) and location | Companies & locations (`/companies`), Company · location picker (header) | HR, Finance, Super Admin |
 
 ## 8. Trust and support
 

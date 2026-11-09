@@ -19,6 +19,7 @@ function RecordedPunches({ code, date }) {
   return list.map((p) => `${p.type === "in" ? "In" : "Out"} ${new Date(p.ts).toTimeString().slice(0, 5)}`).join(" · ");
 }
 import { openDocument } from "../../lib/openDocument.js";
+import { SOURCE_LABEL, PAID_BY_LABEL } from "../../lib/expenseHub.js";
 
 export function statusLabel(r) {
   if (r.status === "Pending") return r.stage === "manager" ? "Pending · manager" : "Pending · admin";
@@ -71,8 +72,10 @@ function Doc({ doc }) {
 }
 
 export function RequestDetail({ r }) {
-  const { empBy, orgBy, nameOf, leaveTypeBy, expCatBy } = useStore();
+  const { empBy, orgBy, nameOf, leaveTypeBy, expCatBy, allData } = useStore();
   const e = empBy[r.employee_code];
+  const company = (allData?.companies || []).find((c) => c.company_id === (r.company_id || e?.company_id));
+  const location = (allData?.workLocations || []).find((l) => l.location_id === (r.location_id || e?.location_id));
   return (
     <Stack spacing={2}>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }} useFlexGap>
@@ -83,7 +86,8 @@ export function RequestDetail({ r }) {
       </Stack>
       <ApprovalChain item={r} />
       <FlagList flags={r.flags || []} dense />
-      <KeyVal cols={3} items={[["Employee", `${e?.full_name} (${r.employee_code})`], ["Department", orgBy[e?.department]?.name], ["Reporting manager", e?.reporting_manager ? nameOf(e.reporting_manager) : "—"]]} />
+      <KeyVal cols={3} items={[["Employee", `${e?.full_name} (${r.employee_code})`], ["Department", orgBy[e?.department]?.name], ["Reporting manager", e?.reporting_manager ? nameOf(e.reporting_manager) : "—"], ...(company ? [["Company", company.short], ["Location", location?.name || "—"], ["Cost centre", location?.cost_centre || "—"]] : [])]} />
+      {r.source?.app && <Alert severity="info" sx={{ py: 0.3 }}>Brought in from <b>{SOURCE_LABEL(r.source.app)}</b> · {r.source.external_id} · status there: {r.source.external_status}{r.currency && r.currency !== "INR" ? ` · original currency ${r.currency}` : ""}{r.paid_by && r.paid_by !== "employee" ? ` · paid by ${PAID_BY_LABEL[r.paid_by] || r.paid_by}${r.vendor ? ` (${r.vendor})` : ""} — nothing to reimburse` : ""}.</Alert>}
       <Divider />
       {r.type === "leave" && (
         <KeyVal
@@ -100,7 +104,7 @@ export function RequestDetail({ r }) {
       )}
       {r.type === "expense" && (
         <>
-          <KeyVal items={[["Title", r.title, { required: true }], ["Project / cost centre", r.project], ["Purpose", r.purpose, { full: true, required: true }], ["Payment", r.payment_mode === "bank" ? "Bank transfer" : "With next payroll"], ["Advance adjusted", r.advance_ref || "—"]]} />
+          <KeyVal items={[["Title", r.title, { required: true }], ["Project / cost centre", r.project], ["Purpose", r.purpose, { full: true, required: true }], ["Payment", r.payment_mode === "bank" ? "Bank transfer" : r.payment_mode === "company_paid" ? "Company-paid (no reimbursement)" : "With next payroll"], ["Advance adjusted", r.advance_ref || "—"]]} />
           <TableWrap>
             <Table size="small" sx={{ minWidth: 520 }}>
               <TableHead>

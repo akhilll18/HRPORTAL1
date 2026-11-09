@@ -2,7 +2,7 @@
 // Each action mirrors one REST endpoint (README → API contract) and writes to the audit log.
 import { normalizeLink, jitsiLink, detectProvider } from "../lib/conferencing.js";
 import { nowIso, nextSeq, isoDate } from "../lib/utils.js";
-import { BGV_PACKAGES, BGV_CHECK_LABEL, bgvAccessLevel, bgvStatus, channelMembers } from "../lib/collab.js";
+import { BGV_PACKAGES, BGV_CHECK_LABEL, BGV_CHECK_DEF, CHECK_DONE, bgvChecksFor, stagesOf, stageLabel, checkStage, officialEmailCheck, bgvAccessLevel, bgvStatus, channelMembers } from "../lib/collab.js";
 
 const err = (error) => ({ ok: false, error });
 
@@ -31,7 +31,8 @@ export function makeCollabActions({ mutate, dataRef, sessionRef, pushAudit, push
     if (open) return err(`${open.name} already has an open check (${open.id}).`);
     const vendor = d.bgvVendors.find((v) => v.id === vendor_id);
     if (!vendor) return err("Choose a vendor.");
-    const unsupported = BGV_PACKAGES[pkg].checks.filter((c) => !vendor.checks.includes(c));
+    const country = employee_code ? d.employees.find((i) => i.employee_code === employee_code)?.country_code || "IN" : "IN";
+    const unsupported = bgvChecksFor(pkg, country).filter((c) => !BGV_CHECK_DEF[c]?.inhouse && !vendor.checks.includes(c));
     if (unsupported.length) return err(`${vendor.name} does not run: ${unsupported.map((c) => BGV_CHECK_LABEL[c]).join(", ")}. Pick another vendor or package.`);
     return mutate((x) => {
       const e = employee_code ? x.employees.find((i) => i.employee_code === employee_code) : null;
@@ -42,7 +43,7 @@ export function makeCollabActions({ mutate, dataRef, sessionRef, pushAudit, push
       x.bgv.unshift({
         id, subject_type: e ? "employee" : "candidate", employee_code: e?.employee_code || null, candidate_id: cand?.id || null, name: e?.full_name || cand?.name,
         package: pkg, vendor_id, initiated_at: now, initiated_by: S().code, consent: { status: "pending", requested_at: now },
-        due_date: due_date || isoDate(Date.now() + p.tat * 86400000), checks: p.checks.map((type) => ({ type, status: "pending", remarks: "", candidate_note: "", verified_at: null, docs: [] })),
+        due_date: due_date || isoDate(Date.now() + p.tat * 86400000), checks: bgvChecksFor(pkg, e?.country_code || "IN").map((type) => ({ type, status: "pending", stage: stagesOf(type)[0][0], tracking: [{ stage: stagesOf(type)[0][0], at: now, by: S().code, note: "" }], details: {}, items: type === "documents" ? null : undefined, remarks: "", candidate_note: "", verified_at: null, docs: [] })),
         closed_status: null, closed_at: null, remarks: note || "", history: [{ at: now, by: S().code, action: `Initiated · ${p.label} package · ${vendor.name}` }],
       });
       if (e) {
@@ -72,20 +73,76 @@ export function makeCollabActions({ mutate, dataRef, sessionRef, pushAudit, push
     });
   }
 
+  /**
+   * Update one check: outcome status, tracking stage, check-specific details (PF, address visit, employer email),
+   * the document checklist, remarks and what to ask the person for. Every stage move is kept in the check's tracking log.
+   */
   function updateBgvCheck(id, type, patch) {
     if (!isAdminFor("bgv")) return err("You need the Background verification module.");
-    if (patch.status === "discrepancy" && !String(patch.remarks || "").trim()) return err("Describe the discrepancy (what was declared vs what was verified).");
-    if (patch.status === "insufficient" && !String(patch.candidate_note || "").trim()) return err("Tell the employee what to upload.");
+    const cur = D().bgv.find((i) => i.id === id)?.checks.find((c) => c.type === type);
+    if (!cur) return err("Check not found.");
+    const status = patch.status ?? cur.status;
+    const details = { ...(cur.details || {}), ...(patch.details || {}) };
+    if (["discrepancy", "unable_to_verify"].includes(status) && !String(patch.remarks ?? cur.remarks ?? "").trim()) return err(status === "discrepancy" ? "Describe the discrepancy (what was declared vs what was verified)." : "Say why it could not be verified.");
+    if (status === "insufficient" && !String(patch.candidate_note ?? cur.candidate_note ?? "").trim()) return err("Tell the employee what to upload.");
+    const stages = stagesOf(type).map(([k]) => k);
+    let stage = patch.stage || checkStage(cur);
+    if (!stages.includes(stage)) return err("Unknown stage.");
+    if (CHECK_DONE.includes(status) && !patch.stage) stage = "completed";
+    if (stage === "completed" && !CHECK_DONE.includes(status)) return err("Set the outcome (Verified, Discrepancy, Unable to verify or Not applicable) to complete the check.");
+    const at = (s) => stages.indexOf(stage) >= stages.indexOf(s);
+    if (type === "pf") {
+      if (details.uan && !/^\d{12}$/.test(String(details.uan).replace(/\s/g, ""))) return err("UAN must be 12 digits.");
+      if (at("uan_received") && !details.uan) return err("Enter the UAN to move past “UAN requested”.");
+      if (status === "verified" && details.result && details.result !== "match" && details.result !== "no_pf") return err("EPFO history does not match – record it as a Discrepancy (or Unable to verify), not Verified.");
+    }
+    if (type === "address") {
+      if (at("agent_assigned") && details.method === "physical" && !details.agent) return err("Name the field agent.");
+      if (at("visit_scheduled") && details.method !== "postal" && !details.visit_date) return err("Enter the visit date.");
+      if (at("report_submitted") && !details.outcome) return err("Record the visit outcome.");
+      if (status === "verified" && details.outcome && !["confirmed", "short_stay"].includes(details.outcome)) return err("The visit did not confirm the address – it cannot be Verified.");
+    }
+    if (type === "company_email") {
+      if (at("domain_checked") && !officialEmailCheck(details.hr_email).ok) return err(`HR email: ${officialEmailCheck(details.hr_email).text}.`);
+      if (at("email_sent") && !details.sent_on) return err("Enter the date the email was sent.");
+      if (at("response_received") && !details.response) return err("Record the employer's response.");
+      if (status === "verified" && details.response && details.response !== "confirmed") return err("The employer did not confirm the details – it cannot be Verified.");
+    }
+    const items = patch.items ?? cur.items;
+    if (type === "documents" && status === "verified" && (items || []).some((i) => i.status === "mismatch")) return err("A document is marked Mismatch – record a Discrepancy instead.");
+    if (type === "documents" && status === "verified" && (items || []).some((i) => ["pending", "received"].includes(i.status))) return err("Verify (or mark not applicable) every document in the checklist first.");
     return mutate((x) => {
       const k = x.bgv.find((i) => i.id === id);
       if (!k) return err("Case not found.");
       if (k.closed_status) return err("This case is closed. Reopen it first.");
       const ch = k.checks.find((c) => c.type === type);
       const prev = ch.status;
-      Object.assign(ch, { status: patch.status ?? ch.status, remarks: patch.remarks ?? ch.remarks, candidate_note: patch.candidate_note ?? ch.candidate_note, verified_at: patch.status === "verified" ? nowIso() : ch.verified_at });
-      k.history.push({ at: nowIso(), by: S().code, action: `${BGV_CHECK_LABEL[type]}: ${prev} → ${ch.status}` });
-      if (ch.status === "insufficient" && k.employee_code) pushNote(x, k.employee_code, `Background check: more documents needed for ${BGV_CHECK_LABEL[type]}. ${ch.candidate_note}`, "/bgv-me");
-      audit(x, "BGV_CHECK_UPDATE", `${k.id} · ${type} · ${prev} → ${ch.status}`);
+      const prevStage = checkStage(ch);
+      Object.assign(ch, { status, stage, details, remarks: patch.remarks ?? ch.remarks, candidate_note: patch.candidate_note ?? ch.candidate_note, verified_at: status === "verified" && prev !== "verified" ? nowIso() : ch.verified_at });
+      if (items) ch.items = items;
+      if (ch.status === "pending" && stages.indexOf(stage) > 0) ch.status = "in_progress";
+      ch.tracking ||= [];
+      const moved = prevStage !== stage;
+      if (moved || patch.track_note) ch.tracking.push({ stage, at: nowIso(), by: S().code, note: patch.track_note || "" });
+      const bits = [moved ? `${stageLabel(type, prevStage)} → ${stageLabel(type, stage)}` : "", prev !== status ? `${prev} → ${status}` : ""].filter(Boolean).join(" · ");
+      k.history.push({ at: nowIso(), by: S().code, action: `${BGV_CHECK_LABEL[type]}: ${bits || "details updated"}${patch.track_note ? ` · ${patch.track_note}` : ""}` });
+      if (ch.status === "insufficient" && prev !== "insufficient" && k.employee_code) pushNote(x, k.employee_code, `Background check: more documents needed for ${BGV_CHECK_LABEL[type]}. ${ch.candidate_note}`, "/bgv-me");
+      if (type === "address" && stage === "visit_scheduled" && moved && k.employee_code && details.visit_date) pushNote(x, k.employee_code, `Address verification: a ${details.method === "digital" ? "digital (geo-tagged) check" : "field visit"} is scheduled for ${details.visit_date}. Please make sure someone is at home.`, "/bgv-me");
+      if (type === "pf" && stage === "uan_requested" && patch.track_note && k.employee_code) pushNote(x, k.employee_code, "Background check: please share your UAN (Universal Account Number) for PF verification.", "/bgv-me");
+      audit(x, "BGV_CHECK_UPDATE", `${k.id} · ${type} · ${bits || "details"}`);
+      return { ok: true };
+    });
+  }
+
+  function holdBgv(id, on, reason) {
+    if (!isAdminFor("bgv")) return err("You need the Background verification module.");
+    if (on && !String(reason || "").trim()) return err("Give a reason for putting the case on hold.");
+    return mutate((x) => {
+      const k = x.bgv.find((i) => i.id === id);
+      if (!k || k.closed_status) return err("Only open cases can be put on hold.");
+      k.on_hold = on ? { reason, at: nowIso(), by: S().code } : null;
+      k.history.push({ at: nowIso(), by: S().code, action: on ? `Put on hold · ${reason}` : "Resumed from hold" });
+      audit(x, "BGV_HOLD", `${k.id} · ${on ? `hold · ${reason}` : "resumed"}`);
       return { ok: true };
     });
   }
@@ -104,6 +161,11 @@ export function makeCollabActions({ mutate, dataRef, sessionRef, pushAudit, push
       const ch = k.checks.find((y) => y.type === type);
       ch.docs = [...(ch.docs || []), { name: file.name, size: file.size, type: file.type, data_url: file.data_url, at: nowIso(), by: S().code }];
       if (ch.status === "insufficient" || ch.status === "pending") ch.status = "in_progress";
+      const st = stagesOf(type);
+      if (checkStage(ch) === st[0][0]) {
+        ch.stage = st[1][0];
+        (ch.tracking ||= []).push({ stage: ch.stage, at: nowIso(), by: S().code, note: `Uploaded ${file.name}` });
+      }
       k.history.push({ at: nowIso(), by: S().code, action: `Document uploaded for ${BGV_CHECK_LABEL[type]}: ${file.name}` });
       if (self) notifyBgvTeam(x, `${k.name} uploaded ${file.name} for ${BGV_CHECK_LABEL[type]} (${k.id}).`);
       audit(x, "BGV_DOC_UPLOAD", `${k.id} · ${type} · ${file.name}`);
@@ -117,9 +179,10 @@ export function makeCollabActions({ mutate, dataRef, sessionRef, pushAudit, push
     const c = D().bgv.find((i) => i.id === id);
     if (!c) return err("Case not found.");
     if (c.consent?.status !== "given") return err("Consent has not been given yet.");
-    const open = c.checks.filter((k) => ["pending", "in_progress", "insufficient"].includes(k.status));
+    if (c.on_hold) return err("The case is on hold. Resume it first.");
+    const open = c.checks.filter((k) => !CHECK_DONE.includes(k.status));
     if (decision === "clear" && open.length) return err(`${open.length} check(s) are still open. Verify them or close as "Clear with remarks".`);
-    if (decision === "clear" && c.checks.some((k) => k.status === "discrepancy")) return err("A check has a discrepancy. Close as \"Clear with remarks\" (accepted) or \"Discrepancy\".");
+    if (decision === "clear" && c.checks.some((k) => ["discrepancy", "unable_to_verify"].includes(k.status))) return err("A check has a discrepancy or could not be verified. Close as \"Clear with remarks\" (accepted) or \"Discrepancy\".");
     if (decision !== "clear" && !String(remarks || "").trim()) return err("Add remarks for the decision.");
     return mutate((x) => {
       const k = x.bgv.find((i) => i.id === id);
@@ -586,7 +649,7 @@ export function makeCollabActions({ mutate, dataRef, sessionRef, pushAudit, push
   }
 
   return {
-    initiateBgv, giveBgvConsent, updateBgvCheck, uploadBgvDoc, closeBgv, reopenBgv, cancelBgv, remindBgv, logBgvView, grantBgvAccess, revokeBgvAccess,
+    initiateBgv, giveBgvConsent, updateBgvCheck, holdBgv, uploadBgvDoc, closeBgv, reopenBgv, cancelBgv, remindBgv, logBgvView, grantBgvAccess, revokeBgvAccess,
     addApplicant, updateApplicant, scheduleInterview, setInterviewStatus, submitInterviewFeedback, addAtsNote, saveJobPosting,
     setComplianceStatus, upsertComplianceItem, deleteComplianceItem,
     sendChatMessage, markChannelRead, openDm, createChannel, reactChat, deleteChatMessage,

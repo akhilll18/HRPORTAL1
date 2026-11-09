@@ -75,6 +75,7 @@ export const ROLE_NAV = {
     ] },
     { group: "CORE HR", items: [
       { id: "people", label: "Employee database", icon: "Badge" },
+      { id: "companies", label: "Companies & locations", icon: "Business", modules: ["accounts", "payroll", "expense"] },
       { id: "exits", label: "Exits & F&F settlement", icon: "ExitToApp", modules: ["accounts", "payroll", "onboarding", "leave"] },
       { id: "contracts", label: "Contract management", icon: "Assignment", badge: "contracts", modules: ["contracts", "payroll"] },
       { id: "organization", label: "Org chart", icon: "AccountTree" },
@@ -114,6 +115,7 @@ export const ROLE_NAV = {
       { id: "payroll-agent", label: "Payroll Agent", icon: "SmartToy", module: "payroll", alias: ["variable-pay", "payouts", "filings", "global-payroll"] },
       { id: "payroll", label: "Payroll", icon: "Payments", module: "payroll" },
       { id: "payslips", label: "Payslips", icon: "ReceiptLong", modules: ["payslips", "payroll"], badge: "payslips" },
+      { id: "expense-hub", label: "Expense hub", icon: "ReceiptLong", modules: ["expense", "advance", "payroll"] },
       { id: "spend-cards", label: "Spend cards", icon: "CreditCard", modules: ["expense", "payroll"] },
       { id: "benefits-admin", label: "Benefits administration", icon: "HealthAndSafety", module: "benefits" },
       { id: "wellness", label: "Employee wellness", icon: "Spa", module: "wellness" },
@@ -148,6 +150,7 @@ export const ROLE_NAV = {
     ] },
     { group: "CORE HR", items: [
       { id: "employees", label: "Employee database", icon: "Badge" },
+      { id: "companies", label: "Companies & locations", icon: "Business" },
       { id: "exits", label: "Exits & F&F settlement", icon: "ExitToApp" },
       { id: "contracts", label: "Contract management", icon: "Assignment", badge: "contracts" },
       { id: "fields", label: "Field reference", icon: "ListAlt" },
@@ -182,6 +185,7 @@ export const ROLE_NAV = {
       { id: "payroll-agent", label: "Payroll Agent", icon: "SmartToy", alias: ["variable-pay", "payouts", "filings", "global-payroll"] },
       { id: "payroll", label: "Payroll", icon: "Payments" },
       { id: "payslips", label: "Payslips", icon: "ReceiptLong", badge: "payslips" },
+      { id: "expense-hub", label: "Expense hub", icon: "ReceiptLong" },
       { id: "spend-cards", label: "Spend cards", icon: "CreditCard" },
       { id: "benefits-admin", label: "Benefits & wellness", icon: "HealthAndSafety" },
     ] },

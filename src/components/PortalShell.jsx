@@ -58,6 +58,7 @@ import {
   Inventory as InventoryIcon,
   Checklist as ChecklistIcon,
   Place as PlaceIcon,
+  Business as BusinessIcon,
   RateReview as RateReviewIcon,
   Work as WorkIcon,
   AutoGraph as AutoGraphIcon,
@@ -81,7 +82,7 @@ import {
   Assignment as AssignmentIcon,
   PendingActions as PendingActionsIcon,
 } from "@mui/icons-material";
-const Icons = { Home: HomeIcon, Inbox: InboxIcon, Notifications: NotificationsIcon, AccessTime: AccessTimeIcon, EventAvailable: EventAvailableIcon, Receipt: ReceiptIcon, Stars: StarsIcon, AccountBalanceWallet: AccountBalanceWalletIcon, Person: PersonIcon, Groups: GroupsIcon, Badge: BadgeIcon, AccountTree: AccountTreeIcon, Folder: FolderIcon, School: SchoolIcon, Support: SupportIcon, Dashboard: DashboardIcon, FactCheck: FactCheckIcon, Insights: InsightsIcon, ListAlt: ListAltIcon, AdminPanelSettings: AdminPanelSettingsIcon, Rule: RuleIcon, History: HistoryIcon, Settings: SettingsIcon, Circle: CircleIcon, Fingerprint: FingerprintIcon, PhoneInTalk: PhoneInTalkIcon, Flag: FlagIcon, HealthAndSafety: HealthAndSafetyIcon, Inventory: InventoryIcon, Checklist: ChecklistIcon, Place: PlaceIcon, RateReview: RateReviewIcon, Work: WorkIcon, AutoGraph: AutoGraphIcon, VideoLibrary: VideoLibraryIcon, Monitor: MonitorIcon, Payments: PaymentsIcon, Spa: SpaIcon, Radar: RadarIcon, Shield: ShieldIcon, Public: PublicIcon, Gavel: GavelIcon, ReceiptLong: ReceiptLongIcon, HistoryEdu: HistoryEduIcon, Forum: ForumIcon, CalendarMonth: CalendarMonthIcon, Handshake: HandshakeIcon, VerifiedUser: VerifiedUserIcon, EventNote: EventNoteIcon, SupportAgent: SupportAgentIcon, Computer: ComputerIcon, Assignment: AssignmentIcon, PendingActions: PendingActionsIcon, PhoneIphone: PhoneIphoneIcon, EmojiEvents: EmojiEventsIcon, Schedule: ScheduleIcon, CreditCard: CreditCardIcon, PrivacyTip: PrivacyTipIcon, FlightTakeoff: FlightTakeoffIcon, ExitToApp: ExitToAppIcon, QueryStats: QueryStatsIcon, Policy: PolicyIcon, Tune: TuneIcon, SmartToy: SmartToyIcon, Hub: HubIcon, TaskAlt: TaskAltIcon, RocketLaunch: RocketLaunchIcon, Lock: LockIcon };
+const Icons = { Home: HomeIcon, Inbox: InboxIcon, Notifications: NotificationsIcon, AccessTime: AccessTimeIcon, EventAvailable: EventAvailableIcon, Receipt: ReceiptIcon, Stars: StarsIcon, AccountBalanceWallet: AccountBalanceWalletIcon, Person: PersonIcon, Groups: GroupsIcon, Badge: BadgeIcon, AccountTree: AccountTreeIcon, Folder: FolderIcon, School: SchoolIcon, Support: SupportIcon, Dashboard: DashboardIcon, FactCheck: FactCheckIcon, Insights: InsightsIcon, ListAlt: ListAltIcon, AdminPanelSettings: AdminPanelSettingsIcon, Rule: RuleIcon, History: HistoryIcon, Settings: SettingsIcon, Circle: CircleIcon, Fingerprint: FingerprintIcon, PhoneInTalk: PhoneInTalkIcon, Flag: FlagIcon, HealthAndSafety: HealthAndSafetyIcon, Inventory: InventoryIcon, Checklist: ChecklistIcon, Place: PlaceIcon, RateReview: RateReviewIcon, Work: WorkIcon, AutoGraph: AutoGraphIcon, VideoLibrary: VideoLibraryIcon, Monitor: MonitorIcon, Payments: PaymentsIcon, Spa: SpaIcon, Radar: RadarIcon, Shield: ShieldIcon, Public: PublicIcon, Gavel: GavelIcon, ReceiptLong: ReceiptLongIcon, HistoryEdu: HistoryEduIcon, Forum: ForumIcon, CalendarMonth: CalendarMonthIcon, Handshake: HandshakeIcon, VerifiedUser: VerifiedUserIcon, EventNote: EventNoteIcon, SupportAgent: SupportAgentIcon, Computer: ComputerIcon, Assignment: AssignmentIcon, PendingActions: PendingActionsIcon, PhoneIphone: PhoneIphoneIcon, EmojiEvents: EmojiEventsIcon, Schedule: ScheduleIcon, CreditCard: CreditCardIcon, PrivacyTip: PrivacyTipIcon, FlightTakeoff: FlightTakeoffIcon, ExitToApp: ExitToAppIcon, QueryStats: QueryStatsIcon, Policy: PolicyIcon, Tune: TuneIcon, SmartToy: SmartToyIcon, Hub: HubIcon, TaskAlt: TaskAltIcon, RocketLaunch: RocketLaunchIcon, Lock: LockIcon, Business: BusinessIcon };
 import { Notifications as Bell, Logout as LogOut, Menu, Search, Close as X, TimerOutlined, Key } from "@mui/icons-material";
 import { PhoneIphone as PhoneIphoneIcon, EmojiEvents as EmojiEventsIcon, Schedule as ScheduleIcon, CreditCard as CreditCardIcon, PrivacyTip as PrivacyTipIcon, FlightTakeoff as FlightTakeoffIcon, ExitToApp as ExitToAppIcon, QueryStats as QueryStatsIcon, Policy as PolicyIcon, Tune as TuneIcon, SmartToy as SmartToyIcon, Hub as HubIcon, TaskAlt as TaskAltIcon, RocketLaunch as RocketLaunchIcon, Lock as LockIcon } from "@mui/icons-material";
 import { theme } from "../theme.js";
@@ -100,6 +101,7 @@ import { myContractBadge, approverBadge } from "./contracts/MyContract.jsx";
 import ChangePasswordDialog from "./kit/ChangePasswordDialog.jsx";
 // ONAS: country mode + AI page translation in the header, ONAS logo in the sidebar
 import CountrySwitcher from "../country/CountrySwitcher.jsx";
+import EntitySwitcher from "./EntitySwitcher.jsx";
 import AiPageLocalizer from "../country/AiPageLocalizer.jsx";
 import { COMPANY_LOGO } from "../data/companyLogo.js";
 
@@ -326,6 +328,7 @@ export default function PortalShell({ page, onNavigate, onSearch, children, stag
               <Typography noWrap sx={{ fontSize: "0.65rem", fontWeight: 600, color: "#3d4941" }}>{allItems.find((i) => i.id === page || (i.alias || []).includes(page))?.label || "Home"}</Typography>
             </Stack>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+              <EntitySwitcher />
               <CountrySwitcher />
               <AiPageLocalizer />
               <Box component="form" onSubmit={submitSearch} sx={{ display: { xs: "none", lg: "flex" }, width: 230, height: 34, alignItems: "center", gap: 1, px: 1.2, border: "1px solid #e8ece8", borderRadius: 1, background: "#fafbf9", color: "#8a948d", "&:focus-within": { borderColor: "#9eb9a7", boxShadow: "0 0 0 3px rgba(78,129,96,0.09)" } }}>

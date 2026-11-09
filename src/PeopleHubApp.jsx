@@ -82,6 +82,9 @@ import PeopleXP, { MyApp } from "./pages/suite/PeopleXP.jsx";
 import { GlobalHiring, Relocation, MyRelocation, SpendCards, MyCard } from "./pages/suite/GlobalTeams.jsx";
 import { Integrations, Insights, SetupImport, Billing, Security, ExpertSupport } from "./pages/suite/Platform.jsx";
 import Coverage from "./pages/suite/Coverage.jsx";
+// v10.2: companies & locations, expense hub
+import CompaniesLocations from "./pages/superadmin/CompaniesLocations.jsx";
+import ExpenseHub from "./pages/suite/ExpenseHub.jsx";
 
 function ContractsPageWrap() {
   const { user } = useStore();
@@ -306,6 +309,8 @@ export default function PeopleHubApp() {
     relocation: <Relocation />,
     "spend-cards": <SpendCards />,
     integrations: <Integrations />,
+    "expense-hub": <ExpenseHub />,
+    companies: <CompaniesLocations />,
     insights: <Insights />,
     setup: <SetupImport />,
     billing: <Billing />,

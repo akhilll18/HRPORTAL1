@@ -50,6 +50,8 @@ export const COVERAGE = [
   ["7. Connections and reports", [
     ["Accounting (Tally, QuickBooks, Xero, Zoho Books, SAP), banks and ERP", [["Integrations & API", "/integrations"]], [F, S]],
     ["Dashboards for headcount, payroll cost and attrition", [["Workforce intelligence", "/insights"], ["HR analytics", "/analytics"]], [F, H, S]],
+    ["Employee expenses, third-party expenses and advances from other apps (Concur, Zoho Expense, Expensify, Happay, Fyle, Rydoo, Navan, MakeMyTrip myBiz, Uber for Business, Amex, Ramp, NetSuite, Dynamics 365, Tally) or CSV", [["Expense hub", "/expense-hub"], ["Expenses & travel", "/expenses"]], [E, F, S]],
+    ["Everything segregated by company (legal entity) and location", [["Companies & locations", "/companies"], ["Company · location picker (header)", "/home"]], [H, F, S]],
   ]],
   ["8. Trust and support", [
     ["Clear per-employee monthly pricing, no hidden fees", [["Plan & billing", "/billing"]], [S]],
