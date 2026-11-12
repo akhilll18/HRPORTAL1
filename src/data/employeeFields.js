@@ -83,6 +83,12 @@ export const TDS_SECTIONS = [
 ];
 export const workerTypeOf = (rec) => rec?.worker_type || (rec?.employment_type === "contract" ? "contract" : rec?.employment_type === "intern" ? "intern" : "permanent");
 export const isContingent = (rec) => workerTypeOf(rec) !== "permanent";
+export const workerRoleOf = (rec) => {
+  const type = workerTypeOf(rec);
+  if (type === "intern") return "intern";
+  if (type === "freelance") return "freelancer";
+  return type === "permanent" ? "employee" : "contractor";
+};
 export const workerLabel = (rec) => WORKER_TYPE_BY[workerTypeOf(rec)]?.short || "Permanent";
 /** Defaults applied when HR picks a worker type on the employee form. */
 export function workerDefaults(type) {

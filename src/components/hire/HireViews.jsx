@@ -4,7 +4,7 @@ import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, Dia
 import { AddRounded, PersonAddAlt1Rounded } from "@mui/icons-material";
 import { useStore } from "../../store/AppStore.jsx";
 import { SectionCard, StatCard, Grid, Tag, TableWrap, Mono, HBar } from "../kit/UI.jsx";
-import { dueDate } from "../../pages/workforce/MyOnboarding.jsx";
+import { dueDate } from "../../roles/employee/workforce/MyOnboarding.jsx";
 import { isoDate, fmtDate, fmtNum, DAY } from "../../lib/utils.js";
 
 const STAGES = [["applied", "Applied"], ["screen", "Screened"], ["interview", "Interview"], ["offer", "Offer"], ["hired", "Hired"]];

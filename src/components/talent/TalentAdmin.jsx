@@ -4,7 +4,7 @@ import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, 
 import { EditRounded, AddRounded, DeleteOutlineRounded } from "@mui/icons-material";
 import { useStore } from "../../store/AppStore.jsx";
 import { SectionCard, StatCard, Grid, PersonCell, Tag, TableWrap } from "../kit/UI.jsx";
-import { CycleSteps, STAGE_LABEL } from "../../pages/talent/MyPerformance.jsx";
+import { CycleSteps, STAGE_LABEL } from "../../roles/employee/talent/MyPerformance.jsx";
 import { weightedScore, band, perfLevel, flightRisk } from "../../lib/hrcalc.js";
 import { fmtNum, fmtDate } from "../../lib/utils.js";
 

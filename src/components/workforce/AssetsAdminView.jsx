@@ -5,7 +5,7 @@ import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogT
 import { AddRounded, SearchRounded, MoreVertRounded, DownloadRounded } from "@mui/icons-material";
 import { useStore } from "../../store/AppStore.jsx";
 import { SectionCard, StatCard, Grid, PersonCell, Tag, TableWrap, Mono, HBar } from "../kit/UI.jsx";
-import { ASSET_ICON } from "../../pages/workforce/MyAssets.jsx";
+import { ASSET_ICON } from "../../roles/employee/workforce/MyAssets.jsx";
 import { ASSET_CATEGORIES } from "../../lib/requests.js";
 import { bookValue } from "../../lib/hrcalc.js";
 import { fmtDate, fmtNum, isoDate, downloadCsv } from "../../lib/utils.js";

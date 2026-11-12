@@ -7,7 +7,7 @@ import { SectionCard, StatCard, Grid, PersonCell, Tag, TableWrap, Mono, KeyVal }
 import { COUNTRIES, computePay, complianceChecks, periodContext, toEngineEmp } from "../../lib/payroll/index.js";
 import { dayAttendance, wellnessIndex } from "../../lib/hrcalc.js";
 import { isoDate, fmtDateTime, downloadCsv } from "../../lib/utils.js";
-import { benefitCost } from "../../pages/workforce/MyBenefits.jsx";
+import { benefitCost } from "../../roles/employee/workforce/MyBenefits.jsx";
 import { useCountryChoice } from "../../country/CountryContext.jsx";
 import { isContingent } from "../../data/employeeFields.js";
 

@@ -2,7 +2,7 @@
 // Groups follow the Sahayog HRMS modules (Core HR · Hire & onboard · Talent · Time & workforce · Pay & benefits · Global · Insight · Self-service),
 // with Keka-style Me / My team groups for employees.
 // `module`: an admin sees the item only when they hold that module. `when(ctx)`: extra condition.
-import { isContingent } from "./employeeFields.js";
+import { isContingent, workerRoleOf } from "./employeeFields.js";
 export const ROLE_NAV = {
   emp: [
     { group: "SELF-SERVICE", items: [
@@ -15,7 +15,6 @@ export const ROLE_NAV = {
     ] },
     { group: "COLLABORATE", items: [
       { id: "chat", label: "Chat", icon: "Forum", badge: "chat" },
-      { id: "calendar", label: "Calendar", icon: "CalendarMonth" },
       { id: "meetings", label: "Client meetings", icon: "Handshake" },
       { id: "people-xp", label: "PeopleXP · recognition", icon: "EmojiEvents" },
     ] },
@@ -69,7 +68,6 @@ export const ROLE_NAV = {
     ] },
     { group: "COLLABORATE", items: [
       { id: "chat", label: "Chat", icon: "Forum", badge: "chat" },
-      { id: "calendar", label: "Calendar", icon: "CalendarMonth" },
       { id: "meetings", label: "Meetings", icon: "Handshake" },
       { id: "people-xp", label: "PeopleXP · recognition", icon: "EmojiEvents" },
     ] },
@@ -144,7 +142,6 @@ export const ROLE_NAV = {
     ] },
     { group: "COLLABORATE", items: [
       { id: "chat", label: "Chat", icon: "Forum", badge: "chat" },
-      { id: "calendar", label: "Calendar", icon: "CalendarMonth" },
       { id: "meetings", label: "Meetings", icon: "Handshake" },
       { id: "people-xp", label: "PeopleXP · recognition", icon: "EmojiEvents" },
     ] },
@@ -217,11 +214,14 @@ export const ROLE_NAV = {
 export function navFor(role, isManager, ctx = {}) {
   const { user, data } = ctx;
   const me = role === "emp" && data && user ? data.employees.find((e) => e.employee_code === user.employee_code) : null;
+  const workerRole = me ? workerRoleOf(me) : null;
   return (ROLE_NAV[role] || [])
     .filter((g) => !g.managerOnly || isManager)
     .map((g) => ({
       ...g,
       items: g.items.filter((i) => {
+        if (workerRole === "intern" && ["finances", "benefits-me"].includes(i.id)) return false;
+        if (["contractor", "freelancer"].includes(workerRole) && ["finances", "benefits-me", "people"].includes(i.id)) return false;
         if (i.module && role === "admin" && !(user?.modules || []).includes(i.module)) return false;
         if (i.modules && role === "admin" && !i.modules.some((m) => (user?.modules || []).includes(m))) return false;
         if (i.when && data && !i.when({ data, me, user })) return false;

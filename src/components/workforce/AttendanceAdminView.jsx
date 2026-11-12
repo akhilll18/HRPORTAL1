@@ -8,7 +8,7 @@ import { register, registerCounts, STATUS_META } from "../../lib/workforce.js";
 import { dayAttendance, lastNDays, hhmm, isWeekend } from "../../lib/hrcalc.js";
 import { fmtDistance } from "../../lib/geo.js";
 import { isoDate, fmtDate, timeAgo, fmtNum, downloadCsv } from "../../lib/utils.js";
-import { SourceCell } from "../../pages/workforce/MyAttendance.jsx";
+import { SourceCell } from "../../roles/employee/workforce/MyAttendance.jsx";
 
 export function DevicesTable({ canSync = true }) {
   const { data, syncDevice, notifyToast } = useStore();

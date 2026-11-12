@@ -10,7 +10,6 @@ import {
   ListItemText,
   Typography,
   IconButton as MuiIconButton,
-  InputBase,
   Badge as MuiBadge,
   Popover,
   Divider,
@@ -83,13 +82,13 @@ import {
   PendingActions as PendingActionsIcon,
 } from "@mui/icons-material";
 const Icons = { Home: HomeIcon, Inbox: InboxIcon, Notifications: NotificationsIcon, AccessTime: AccessTimeIcon, EventAvailable: EventAvailableIcon, Receipt: ReceiptIcon, Stars: StarsIcon, AccountBalanceWallet: AccountBalanceWalletIcon, Person: PersonIcon, Groups: GroupsIcon, Badge: BadgeIcon, AccountTree: AccountTreeIcon, Folder: FolderIcon, School: SchoolIcon, Support: SupportIcon, Dashboard: DashboardIcon, FactCheck: FactCheckIcon, Insights: InsightsIcon, ListAlt: ListAltIcon, AdminPanelSettings: AdminPanelSettingsIcon, Rule: RuleIcon, History: HistoryIcon, Settings: SettingsIcon, Circle: CircleIcon, Fingerprint: FingerprintIcon, PhoneInTalk: PhoneInTalkIcon, Flag: FlagIcon, HealthAndSafety: HealthAndSafetyIcon, Inventory: InventoryIcon, Checklist: ChecklistIcon, Place: PlaceIcon, RateReview: RateReviewIcon, Work: WorkIcon, AutoGraph: AutoGraphIcon, VideoLibrary: VideoLibraryIcon, Monitor: MonitorIcon, Payments: PaymentsIcon, Spa: SpaIcon, Radar: RadarIcon, Shield: ShieldIcon, Public: PublicIcon, Gavel: GavelIcon, ReceiptLong: ReceiptLongIcon, HistoryEdu: HistoryEduIcon, Forum: ForumIcon, CalendarMonth: CalendarMonthIcon, Handshake: HandshakeIcon, VerifiedUser: VerifiedUserIcon, EventNote: EventNoteIcon, SupportAgent: SupportAgentIcon, Computer: ComputerIcon, Assignment: AssignmentIcon, PendingActions: PendingActionsIcon, PhoneIphone: PhoneIphoneIcon, EmojiEvents: EmojiEventsIcon, Schedule: ScheduleIcon, CreditCard: CreditCardIcon, PrivacyTip: PrivacyTipIcon, FlightTakeoff: FlightTakeoffIcon, ExitToApp: ExitToAppIcon, QueryStats: QueryStatsIcon, Policy: PolicyIcon, Tune: TuneIcon, SmartToy: SmartToyIcon, Hub: HubIcon, TaskAlt: TaskAltIcon, RocketLaunch: RocketLaunchIcon, Lock: LockIcon, Business: BusinessIcon };
-import { Notifications as Bell, Logout as LogOut, Menu, Search, Close as X, TimerOutlined, Key } from "@mui/icons-material";
+import { Notifications as Bell, Logout as LogOut, Menu, Close as X, TimerOutlined, Key } from "@mui/icons-material";
 import { PhoneIphone as PhoneIphoneIcon, EmojiEvents as EmojiEventsIcon, Schedule as ScheduleIcon, CreditCard as CreditCardIcon, PrivacyTip as PrivacyTipIcon, FlightTakeoff as FlightTakeoffIcon, ExitToApp as ExitToAppIcon, QueryStats as QueryStatsIcon, Policy as PolicyIcon, Tune as TuneIcon, SmartToy as SmartToyIcon, Hub as HubIcon, TaskAlt as TaskAltIcon, RocketLaunch as RocketLaunchIcon, Lock as LockIcon } from "@mui/icons-material";
 import { theme } from "../theme.js";
 import { Avatar } from "./PortalUI.jsx";
 import { meshBackground } from "./glass/Glass.jsx";
 import { useStore, ROLE_LABEL } from "../store/AppStore.jsx";
-import { inboxCount } from "../pages/inbox/InboxHub.jsx";
+import { inboxCount } from "../roles/shared/inbox/InboxHub.jsx";
 import { navFor } from "../data/roleNav.js";
 import { timeAgo } from "../lib/utils.js";
 import { IT_OPEN, slaState } from "../lib/itdesk.js";
@@ -172,7 +171,7 @@ function IdleGuard() {
   );
 }
 
-export default function PortalShell({ page, onNavigate, onSearch, children, stage }) {
+export default function PortalShell({ page, onNavigate, children, stage }) {
   const glass = stage === "glass";
   const muiTheme = useTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"));
@@ -180,7 +179,6 @@ export default function PortalShell({ page, onNavigate, onSearch, children, stag
   const { user, data, logout, markRead, markAllRead, reportsOf, pendingForManager, pendingForAdmin } = store;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [search, setSearch] = useState("");
   const [notifAnchor, setNotifAnchor] = useState(null);
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [pwOpen, setPwOpen] = useState(false);
@@ -216,14 +214,7 @@ export default function PortalShell({ page, onNavigate, onSearch, children, stag
     if (key === "compliance") return complianceCalendar(data).filter((c) => c.status === "overdue" || (c.status === "due_soon" && (user.role === "superadmin" || c.owner === user.code))).length;
     return 0;
   };
-  const allItems = groups.flatMap((g) => g.items);
   const subtitle = user.role === "emp" ? user.designation : user.role === "admin" ? `Admin · ${user.modules.join(", ")}` : "Super Admin · global";
-
-  function submitSearch(e) {
-    e.preventDefault();
-    onSearch(search.trim());
-    setMobileOpen(false);
-  }
 
   const drawerContent = (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", p: collapsed ? "21px 9px 13px" : "21px 14px 13px", background: "#fbfcfa", overflowY: "auto" }}>
@@ -322,20 +313,15 @@ export default function PortalShell({ page, onNavigate, onSearch, children, stag
             <MuiIconButton size="small" aria-label={isMobile ? "Open menu" : collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => (isMobile ? setMobileOpen(true) : setCollapsed((v) => !v))}>
               <Menu sx={{ fontSize: 20 }} />
             </MuiIconButton>
-            <Stack direction="row" spacing={1.2} sx={{ alignItems: "center", flex: 1, minWidth: 0 }}>
-              <Typography noWrap sx={{ fontSize: "0.65rem", color: "#8a948d", display: { xs: "none", sm: "block" } }}>{theme.workspaceName}</Typography>
-              <Typography sx={{ color: "#c8cec9", display: { xs: "none", sm: "block" } }}>/</Typography>
-              <Typography noWrap sx={{ fontSize: "0.65rem", fontWeight: 600, color: "#3d4941" }}>{allItems.find((i) => i.id === page || (i.alias || []).includes(page))?.label || "Home"}</Typography>
-            </Stack>
+            <Box sx={{ flex: 1, minWidth: 0 }} />
             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
               <EntitySwitcher />
               <CountrySwitcher />
               <AiPageLocalizer />
-              <Box component="form" onSubmit={submitSearch} sx={{ display: { xs: "none", lg: "flex" }, width: 230, height: 34, alignItems: "center", gap: 1, px: 1.2, border: "1px solid #e8ece8", borderRadius: 1, background: "#fafbf9", color: "#8a948d", "&:focus-within": { borderColor: "#9eb9a7", boxShadow: "0 0 0 3px rgba(78,129,96,0.09)" } }}>
-                <Search sx={{ fontSize: 16 }} />
-                <InputBase placeholder="Search people..." value={search} onChange={(e) => setSearch(e.target.value)} sx={{ fontSize: "0.65rem", flex: 1 }} slotProps={{ input: { "aria-label": "Search people" } }} />
-              </Box>
               <IdleGuard />
+              <MuiIconButton size="small" aria-label="Open calendar" onClick={() => onNavigate("calendar")} sx={{ color: "#66716a", "&:hover": { background: "#f1f4f0" } }}>
+                <CalendarMonthIcon sx={{ fontSize: 18 }} />
+              </MuiIconButton>
               <MuiIconButton size="small" aria-label={`Notifications, ${unread} unread`} onClick={(e) => setNotifAnchor(e.currentTarget)} sx={{ color: "#66716a", "&:hover": { background: "#f1f4f0" } }}>
                 <MuiBadge color="secondary" badgeContent={unread} overlap="circular">
                   <Bell sx={{ fontSize: 18 }} />
