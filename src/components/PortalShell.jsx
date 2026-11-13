@@ -90,6 +90,7 @@ import { meshBackground } from "./glass/Glass.jsx";
 import { useStore, ROLE_LABEL } from "../store/AppStore.jsx";
 import { inboxCount } from "../roles/shared/inbox/InboxHub.jsx";
 import { navFor } from "../data/roleNav.js";
+import { workerRoleOf } from "../data/employeeFields.js";
 import { timeAgo } from "../lib/utils.js";
 import { IT_OPEN, slaState } from "../lib/itdesk.js";
 import { docChecklist } from "../lib/empdocs.js";
@@ -186,6 +187,13 @@ export default function PortalShell({ page, onNavigate, children, stage }) {
   if (!user) return null;
   const isManager = user.role === "emp" && reportsOf(user.employee_code).length > 0;
   const groups = navFor(user.role, isManager, { user, data });
+  const employee = data.employees.find((record) => record.employee_code === user.employee_code);
+  const workerLabels = { employee: "Permanent Employee", intern: "Intern", freelancer: "Freelancer", contractor: "Contract Worker" };
+  const roleDisplay = user.role === "emp"
+    ? workerLabels[workerRoleOf(employee || user)]
+    : user.role === "admin"
+      ? user.modules.includes("payroll") ? "Finance Admin" : "HR Admin"
+      : "Super Admin";
   const mine = data.notifications.filter((n) => n.to === user.code);
   const unread = mine.filter((n) => !n.read).length;
   const badgeValue = (key) => {
@@ -214,7 +222,7 @@ export default function PortalShell({ page, onNavigate, children, stage }) {
     if (key === "compliance") return complianceCalendar(data).filter((c) => c.status === "overdue" || (c.status === "due_soon" && (user.role === "superadmin" || c.owner === user.code))).length;
     return 0;
   };
-  const subtitle = user.role === "emp" ? user.designation : user.role === "admin" ? `Admin · ${user.modules.join(", ")}` : "Super Admin · global";
+  const subtitle = user.role === "emp" ? [roleDisplay, user.designation].filter(Boolean).join(" · ") : roleDisplay;
 
   const drawerContent = (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", p: collapsed ? "21px 9px 13px" : "21px 14px 13px", background: "#fbfcfa", overflowY: "auto" }}>
@@ -235,7 +243,7 @@ export default function PortalShell({ page, onNavigate, children, stage }) {
       </Stack>
       {!collapsed && (
         <Box sx={{ mx: 1, mb: 2, px: 1, py: 0.5, borderRadius: 1, background: "#eaf2ed", color: "primary.main", fontSize: "0.55rem", fontWeight: 700, letterSpacing: "0.8px", alignSelf: "flex-start" }}>
-          {ROLE_LABEL[user.role].toUpperCase()} VIEW{isManager ? " · MANAGER" : ""}
+          {roleDisplay.toUpperCase()} VIEW{isManager ? " · MANAGER" : ""}
         </Box>
       )}
 
@@ -368,7 +376,7 @@ export default function PortalShell({ page, onNavigate, children, stage }) {
                 <Avatar name={user.full_name} />
                 <Box sx={{ display: { xs: "none", md: "block" } }}>
                   <Typography sx={{ fontSize: "0.65rem", fontWeight: 600, lineHeight: 1.2 }}>{user.full_name}</Typography>
-                  <Typography sx={{ fontSize: "0.55rem", color: "#8a948d" }}>{ROLE_LABEL[user.role]}</Typography>
+                  <Typography sx={{ fontSize: "0.55rem", color: "#8a948d" }}>{roleDisplay}</Typography>
                 </Box>
               </Stack>
               <MuiMenu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }}>

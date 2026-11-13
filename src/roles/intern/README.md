@@ -1,3 +1,3 @@
-# intern role bucket
+# Intern role
 
-Placeholder. The app has no `intern` auth role (roles are emp / admin / superadmin); see REFACTOR-NOTES.md.
+Interns authenticate through the employee account type and are classified by worker type. Role-specific home entry points live in `pages/`; common employee modules are reused with intern access rules from `src/data/roleNav.js`.

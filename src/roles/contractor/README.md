@@ -1,3 +1,3 @@
-# contractor role bucket
+# Contract worker role
 
-Placeholder. The app has no `contractor` auth role (roles are emp / admin / superadmin); see REFACTOR-NOTES.md.
+Contract workers authenticate through the employee account type and are classified by worker type. Role-specific home entry points live in `pages/`; common employee modules are reused with contractor access rules from `src/data/roleNav.js`.

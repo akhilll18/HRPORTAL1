@@ -9,7 +9,7 @@ export const ROLE_NAV = {
       { id: "home", label: "Home", icon: "Home" },
       { id: "inbox", label: "Inbox & notifications", icon: "Inbox", badge: "inbox-all", alias: ["notifications"] },
       { id: "profile", label: "My profile", icon: "Person" },
-      { id: "my-contract", label: "My contract", icon: "Assignment", badge: "contract-me", when: ({ me }) => isContingent(me) },
+      { id: "my-contract", label: "My contract", icon: "Assignment", badge: "contract-me", when: ({ me }) => isContingent(me) && workerRoleOf(me) !== "intern" },
       { id: "country", label: "Country space", icon: "Public" },
       { id: "my-app", label: "Mobile app", icon: "PhoneIphone" },
     ] },
@@ -65,6 +65,7 @@ export const ROLE_NAV = {
       { id: "country", label: "Country space", icon: "Public" },
       { id: "reports", label: "Reports", icon: "Insights" },
       { id: "insights", label: "Workforce intelligence", icon: "QueryStats" },
+      { id: "holiday-greetings", label: "Holiday greetings", icon: "EventAvailable", when: ({ user }) => !user?.modules?.includes("payroll") },
     ] },
     { group: "COLLABORATE", items: [
       { id: "chat", label: "Chat", icon: "Forum", badge: "chat" },
@@ -221,7 +222,7 @@ export function navFor(role, isManager, ctx = {}) {
       ...g,
       items: g.items.filter((i) => {
         if (workerRole === "intern" && ["finances", "benefits-me"].includes(i.id)) return false;
-        if (["contractor", "freelancer"].includes(workerRole) && ["finances", "benefits-me", "people"].includes(i.id)) return false;
+        if (["contractor", "freelancer"].includes(workerRole) && ["finances", "benefits-me", "people", "performance-me"].includes(i.id)) return false;
         if (i.module && role === "admin" && !(user?.modules || []).includes(i.module)) return false;
         if (i.modules && role === "admin" && !i.modules.some((m) => (user?.modules || []).includes(m))) return false;
         if (i.when && data && !i.when({ data, me, user })) return false;

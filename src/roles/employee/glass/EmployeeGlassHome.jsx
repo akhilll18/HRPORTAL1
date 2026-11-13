@@ -1,8 +1,8 @@
 // Employee home: glass dashboard with the punch orb, today's picture, balances, team view for managers.
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Stack, Typography } from "@mui/material";
-import { EventAvailableRounded, ReceiptLongRounded, StarsRounded, FlagRounded, PhoneInTalkRounded, InsightsRounded, ScheduleRounded, InventoryRounded, AddRounded, HistoryEduRounded, PlaceRounded, ViewQuiltRounded } from "@mui/icons-material";
+import { EventAvailableRounded, ReceiptLongRounded, StarsRounded, FlagRounded, PhoneInTalkRounded, InsightsRounded, ScheduleRounded, InventoryRounded, AddRounded, HistoryEduRounded, PlaceRounded, ViewQuiltRounded, CakeRounded } from "@mui/icons-material";
 import { useStore } from "../../../store/AppStore.jsx";
 import { G, GlassCard, GlassStat, GlassGrid, GlassBars, GlassButton, GlassRow, GlassPill, GlassAvatar, Ring, SplitBar, DemoClockNote } from "../../../components/glass/Glass.jsx";
 import PunchPanel from "../../../components/workforce/PunchPanel.jsx";
@@ -12,10 +12,19 @@ import { isoDate, fmtNum, timeAgo } from "../../../lib/utils.js";
 import { REQUEST_TYPES } from "../../../lib/requests.js";
 import { AiInsight } from "../../../components/ai/AiInsight.jsx";
 import { holidaysFor } from "../../../country/countryPacks.js";
+import { HOLIDAY_GREETINGS_KEY, readHolidayGreetings } from "../../../data/holidayGreetings.js";
 
-export default function EmployeeGlassHome({ classic, view = "glass", onView = () => {}, restrictedWorker = false }) {
+export default function EmployeeGlassHome({ classic, view = "glass", onView = () => {}, restrictedWorker = false, workerRole = "employee", birthdayEmployees = [] }) {
   const store = useStore();
   const { data, user, leaveBalanceOf, balanceOf, reportsOf, pendingForManager, nameOf } = store;
+  const [greetingState, setGreetingState] = useState(readHolidayGreetings);
+  useEffect(() => {
+    const refresh = (event) => {
+      if (!event.key || event.key === HOLIDAY_GREETINGS_KEY) setGreetingState(readHolidayGreetings());
+    };
+    window.addEventListener("storage", refresh);
+    return () => window.removeEventListener("storage", refresh);
+  }, []);
   const navigate = useNavigate();
   const e = data.employees.find((x) => x.employee_code === user.employee_code);
   const today = isoDate();
@@ -44,7 +53,32 @@ export default function EmployeeGlassHome({ classic, view = "glass", onView = ()
   const openReqs = data.requests.filter((r) => r.employee_code === e.employee_code && r.status === "Pending");
   const myAssets = data.assets.filter((a) => a.assigned_to === e.employee_code);
   const toAck = myAssets.filter((a) => !a.acknowledged);
-  const nextHoliday = holidaysFor(data, e).find((h) => h.date >= today);
+  const countryHolidays = holidaysFor(data, e);
+  const configuredHolidays = Object.entries(greetingState.greetings)
+    .filter(([name, greeting]) => greeting.date && !countryHolidays.some((holiday) => holiday.name === name))
+    .map(([name, greeting]) => ({ name, date: greeting.date, type: "holiday" }));
+  const nextHoliday = [...countryHolidays.map((holiday) => ({
+    ...holiday,
+    date: greetingState.greetings[holiday.name]?.date || holiday.date,
+  })), ...configuredHolidays]
+    .filter((holiday) => holiday.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  const daysUntilHoliday = nextHoliday ? Math.ceil((new Date(`${nextHoliday.date}T12:00:00`) - new Date(`${today}T00:00:00`)) / 86400000) : Infinity;
+  const holidayGreeting = nextHoliday && daysUntilHoliday <= 7 ? greetingState.greetings[nextHoliday.name] : null;
+  const birthdays = birthdayEmployees
+    .filter((employee) => employee.status === "active" && employee.date_of_birth && employee.employee_code !== e.employee_code)
+    .map((employee) => {
+      const [, month, day] = employee.date_of_birth.split("-").map(Number);
+      const now = new Date();
+      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let nextDate = new Date(now.getFullYear(), month - 1, day);
+      if (nextDate < todayDate) nextDate = new Date(now.getFullYear() + 1, month - 1, day);
+      return { employee, days: Math.round((nextDate - todayDate) / 86400000) };
+    })
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 4);
+  const contingent = restrictedWorker || workerRole === "intern";
+  const workerTitle = { employee: "Permanent Employee", intern: "Intern", freelancer: "Freelancer", contractor: "Contract Worker" }[workerRole];
   const onb = data.onboarding.find((o) => o.employee_code === e.employee_code);
   const praise = data.feedback.filter((f) => f.to === e.employee_code && (f.visibility === "public" || f.to === e.employee_code)).slice(0, 2);
   const live = data.locations[e.employee_code];
@@ -60,7 +94,7 @@ export default function EmployeeGlassHome({ classic, view = "glass", onView = ()
     !consent && { icon: <PlaceRounded />, title: "Choose your monitoring settings", sub: "Location while clocked in and work activity", to: "/my-activity" },
     nextHoliday && { kind: "holiday", icon: <EventAvailableRounded />, title: nextHoliday.name, sub: `${new Date(`${nextHoliday.date}T12:00:00`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}${nextHoliday.type === "floater" ? " · floater" : ""}`, to: "/leave" },
   ].filter(Boolean);
-  const visibleUpcoming = restrictedWorker ? upcoming.filter((item) => item.kind !== "holiday") : upcoming;
+  const visibleUpcoming = upcoming;
 
   if (view === "classic" && classic) {
     return (
@@ -81,7 +115,7 @@ export default function EmployeeGlassHome({ classic, view = "glass", onView = ()
           <Typography component="h1" sx={{ fontFamily: "Manrope", fontWeight: 800, fontSize: { xs: "1.6rem", md: "2.1rem" }, lineHeight: 1.1, letterSpacing: "-0.02em" }}>
             {hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"}, {e.full_name.split(" ")[0]}
           </Typography>
-          <Typography sx={{ fontSize: "0.72rem", color: G.muted, mt: 0.5 }}>{e.designation} in {e.department}{e.reporting_manager ? `, reporting to ${nameOf(e.reporting_manager)}` : ""}</Typography>
+          <Typography sx={{ fontSize: "0.72rem", color: G.muted, mt: 0.5 }}>{workerTitle} · {e.designation} in {e.department}{e.reporting_manager ? `, reporting to ${nameOf(e.reporting_manager)}` : ""}</Typography>
         </Box>
         <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
           {!restrictedWorker && <GlassButton variant="solid" startIcon={<AddRounded />} onClick={() => navigate("/leave?new=1")}>Apply leave</GlassButton>}
@@ -129,13 +163,14 @@ export default function EmployeeGlassHome({ classic, view = "glass", onView = ()
       </Box>
 
       <GlassGrid min={170} sx={{ mb: 1.6 }}>
-        <GlassStat label="Earned leave" value={el?.available ?? "—"} hint={`Casual ${cl?.available ?? 0} · pending ${el?.pending ?? 0}`} icon={<EventAvailableRounded />} onClick={() => navigate("/leave")} />
-        <GlassStat label="Goal progress" value={`${goalPct}%`} hint={`${myGoals.filter((g) => g.status === "at_risk").length} at risk · ${data.cycle.name}`} icon={<FlagRounded />} onClick={() => navigate("/performance-me")} />
+        <GlassStat label={workerRole === "intern" ? "Request leave" : contingent ? "Available balance" : "Earned leave"} value={contingent ? "0" : el?.available ?? "—"} hint={contingent ? "Available balance · 0" : `Casual ${cl?.available ?? 0} · pending ${el?.pending ?? 0}`} icon={<EventAvailableRounded />} onClick={() => navigate("/leave")} />
+        {!restrictedWorker && <GlassStat label="Goal progress" value={`${goalPct}%`} hint={`${myGoals.filter((g) => g.status === "at_risk").length} at risk · ${data.cycle.name}`} icon={<FlagRounded />} onClick={() => navigate("/performance-me")} />}
         {e.call_tracking === "yes" && <GlassStat label="Calls today" value={`${cs.total}/${data.settings.call_daily_target}`} hint={`${cs.connectRate}% connected · ${cs.talkMin} min talk`} icon={<PhoneInTalkRounded />} tone="info" onClick={() => navigate("/calls")} />}
         <GlassStat label="Focus today" value={consent?.activity ? `${prod.productivePct}%` : "Off"} hint={consent?.activity ? `${Math.round(prod.active / 60 * 10) / 10} h active · ${prod.idlePct}% idle` : "Activity tracking needs your consent"} icon={<InsightsRounded />} tone="fog" onClick={() => navigate("/my-activity")} />
+        {restrictedWorker && <GlassStat label="Open leave requests" value="0" hint="Leave is not included in your contract" icon={<ScheduleRounded />} onClick={() => navigate("/leave")} />}
       </GlassGrid>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: isManager ? "1fr 1fr 1fr" : "1.2fr 1fr" }, gap: 1.6 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: isManager && !restrictedWorker ? "repeat(4, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))" }, gap: 1.6 }}>
         {isManager && !restrictedWorker && (
           <GlassCard title="My team today" subtitle={`${team.length} direct reports`} action={<GlassButton onClick={() => navigate("/inbox")}>{pend.requests.length + pend.points.length} to approve</GlassButton>}>
             <SplitBar parts={[{ label: "On time", value: tc.present, color: G.mint }, { label: "Late", value: tc.late, color: G.saffron }, { label: "On leave", value: tc.leave, color: G.info }, { label: "Not in", value: tc.absent + tc.not_in, color: "rgba(255,255,255,0.35)" }, { label: "Out", value: tc.out, color: "#6FA48F" }]} />
@@ -147,7 +182,12 @@ export default function EmployeeGlassHome({ classic, view = "glass", onView = ()
           </GlassCard>
         )}
         <GlassCard title="Coming up" subtitle="Things that need you">
-          {visibleUpcoming.length === 0 ? <Typography sx={{ fontSize: "0.68rem", color: G.muted }}>Nothing pending. Enjoy your day.</Typography> : visibleUpcoming.map((u) => <GlassRow key={u.title} left={<Box sx={{ color: G.mint, display: "grid", "& svg": { fontSize: 20 } }}>{u.icon}</Box>} title={u.title} sub={u.sub} onClick={() => navigate(u.to)} />)}
+          {greetingState.error && <Typography sx={{ fontSize: "0.62rem", color: G.saffron, mb: 1 }}>{greetingState.error}</Typography>}
+          {holidayGreeting && <Box component="img" src={holidayGreeting.image} alt={`${nextHoliday.name} greeting`} sx={{ display: "block", width: "100%", maxHeight: 160, mb: 1, borderRadius: 2, objectFit: "cover" }} />}
+          {visibleUpcoming.filter((item) => !holidayGreeting || item.kind !== "holiday").length === 0 ? <Typography sx={{ fontSize: "0.68rem", color: G.muted }}>Nothing pending. Enjoy your day.</Typography> : visibleUpcoming.filter((item) => !holidayGreeting || item.kind !== "holiday").map((u) => <GlassRow key={u.title} left={<Box sx={{ color: G.mint, display: "grid", "& svg": { fontSize: 20 } }}>{u.icon}</Box>} title={u.title} sub={u.sub} onClick={() => navigate(u.to)} />)}
+        </GlassCard>
+        <GlassCard title="Upcoming birthdays" subtitle="Celebrate your teammates">
+          {birthdays.length ? birthdays.map(({ employee, days }) => <GlassRow key={employee.employee_code} left={<CakeRounded sx={{ color: G.saffron, fontSize: 20 }} />} title={employee.full_name} sub={days === 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`} onClick={!restrictedWorker ? () => navigate("/people") : undefined} />) : <Typography sx={{ fontSize: "0.68rem", color: G.muted }}>No upcoming birthdays.</Typography>}
         </GlassCard>
         <GlassCard title="Recognition and assets">
           {praise.map((f) => <GlassRow key={f.id} left={<GlassAvatar name={nameOf(f.from)} />} title={f.text} sub={`${nameOf(f.from)} · ${timeAgo(f.at)}`} onClick={() => navigate("/performance-me")} />)}

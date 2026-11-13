@@ -9,6 +9,9 @@ import AiLayer from "../components/ai/AiLayer.jsx";
 
 // Original PeopleHub pages
 import OverviewPage from "../roles/employee/pages/OverviewPage.jsx";
+import InternHomePage from "../roles/intern/pages/HomePage.jsx";
+import FreelancerHomePage from "../roles/freelancer/pages/HomePage.jsx";
+import ContractorHomePage from "../roles/contractor/pages/HomePage.jsx";
 import PeoplePage from "../roles/shared/pages/PeoplePage.jsx";
 import DocumentsPage from "../roles/shared/pages/DocumentsPage.jsx";
 import LearningHub from "../roles/shared/learning/LearningHub.jsx";
@@ -30,6 +33,7 @@ import MyTeamPage from "../roles/employee/team/MyTeamPage.jsx";
 import AdminDashboard from "../roles/admin/pages/AdminDashboard.jsx";
 import AdminReports from "../roles/admin/pages/AdminReports.jsx";
 import AdminProfile from "../roles/admin/pages/AdminProfile.jsx";
+import HolidayGreetingSettings from "../roles/admin/pages/HolidayGreetingSettings.jsx";
 import ApprovalsPage from "../roles/shared/requests/ApprovalsPage.jsx";
 
 // Super Admin
@@ -152,7 +156,6 @@ export default function AppShell() {
   const [trainingVideos, setTrainingVideos] = useState(() => load("training-videos", []));
   const [supportTickets, setSupportTickets] = useState(() => load("tickets", ticketSeed));
   const [userDocuments, setUserDocuments] = useState(() => load(`${code}-user-documents`, []));
-  const [attendanceRecords, setAttendanceRecords] = useState(() => load(`${code}-attendance-records`, []));
   const [dialog, setDialog] = useState(null);
   const [employeeForm, setEmployeeForm] = useState(false);
   const [homeView, setHomeView] = useState(() => load(`${code}-home-view`, "glass"));
@@ -161,17 +164,17 @@ export default function AppShell() {
   useEffect(() => { save("training-videos", trainingVideos); }, [trainingVideos]);
   useEffect(() => { save("tickets", supportTickets); }, [supportTickets]);
   useEffect(() => { save(`${code}-user-documents`, userDocuments); }, [userDocuments, code]);
-  useEffect(() => { save(`${code}-attendance-records`, attendanceRecords); }, [attendanceRecords, code]);
   useEffect(() => { window.scrollTo(0, 0); }, [page]);
 
   // Keep PeopleHub's theme user (used by the original pages) in step with the signed-in account.
   if (user) {
     theme.workspaceName = APP_CONFIG.companyName;
     theme.companyName = APP_CONFIG.companyName;
+    const workerLabels = { employee: "Permanent Employee", intern: "Intern", freelancer: "Freelancer", contractor: "Contract Worker" };
     Object.assign(theme.currentUser, {
       name: user.full_name,
       shortName: user.full_name.split(" ")[0],
-      role: user.designation || (user.role === "admin" ? "Administrator" : "Super Admin"),
+      role: user.role === "emp" ? workerLabels[workerRoleOf(user)] : user.role === "admin" ? (user.modules?.includes("payroll") ? "Finance Admin" : "HR Admin") : "Super Admin",
       employeeId: user.employee_code || user.code,
       department: user.department || "Administration",
       email: user.email,
@@ -205,6 +208,7 @@ export default function AppShell() {
       }));
   }, [data.employees, data.requests, today, bgvOf, empSelf, inCountry]); // eslint-disable-line react-hooks/exhaustive-deps
   const departments = data.orgUnits.filter((o) => o.parent_unit).map((o) => o.name);
+  const birthdayEmployees = data.employees.filter((employee) => people.some((person) => person.id === employee.employee_code));
 
   if (!user) return null;
   const canManagePeople = user.role === "superadmin" || (user.role === "admin" && user.permissions_scope.includes("people"));
@@ -232,15 +236,8 @@ export default function AppShell() {
     return setDialog({ type, data: data2 });
   }
 
-  function toggleCheckIn() {
-    const last = attendanceRecords[0];
-    const type = last?.type === "Tap in" ? "Tap out" : "Tap in";
-    setAttendanceRecords((current) => [{ id: `ATT-${Date.now()}`, type, timestamp: new Date().toISOString() }, ...current]);
-    notifyToast(type === "Tap in" ? "You are now clocked in." : "You are now clocked out.");
-  }
-  const checkedIn = attendanceRecords[0]?.type === "Tap in";
-  const clockInAt = attendanceRecords.find((r) => r.type === "Tap in")?.timestamp || null;
-  const clockOutAt = checkedIn ? null : attendanceRecords.find((r) => r.type === "Tap out")?.timestamp || null;
+  const myPunches = data.punches.filter((p) => p.employee_code === user.employee_code).sort((a, b) => b.ts.localeCompare(a.ts));
+  const attendanceRecords = myPunches.map((p) => ({ id: p.id, type: p.type === "in" ? "Tap in" : "Tap out", timestamp: p.ts }));
 
   function uploadTrainingVideo(file, details) {
     if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) return notifyToast("Choose an image or video file to upload.", "error");
@@ -313,20 +310,21 @@ export default function AppShell() {
     coverage: <Coverage />,
   };
 
+  const HomeOverview = ({ intern: InternHomePage, freelancer: FreelancerHomePage, contractor: ContractorHomePage })[workerRole] || OverviewPage;
   const byRole = {
     emp: {
       home: (
-        <EmployeeGlassHome view={homeView} onView={setHomeView} restrictedWorker={restrictedWorker} classic={
-        <OverviewPage
+        <EmployeeGlassHome view={homeView} onView={setHomeView} restrictedWorker={restrictedWorker} workerRole={workerRole} birthdayEmployees={birthdayEmployees} classic={
+        <HomeOverview
           onNavigate={go}
           onAction={pageAction}
           role={workerRole}
-          checkedIn={checkedIn}
-          onToggle={toggleCheckIn}
           employeeCount={people.length}
           pendingLeaves={data.requests.filter((r) => r.type === "leave" && r.employee_code === user.employee_code && r.status === "Pending").length}
           departmentCount={departments.length}
           attendanceRecords={attendanceRecords}
+          employees={birthdayEmployees}
+          currentEmployeeCode={user.employee_code}
         />} />
       ),
 
@@ -375,6 +373,7 @@ export default function AppShell() {
       ),
       reports: <AdminReports />,
       profile: <AdminProfile />,
+      "holiday-greetings": <HolidayGreetingSettings />,
     },
     superadmin: {
       super: <OpsGlassHome view={homeView} onView={setHomeView} classic={<SuperDashboard />} />,

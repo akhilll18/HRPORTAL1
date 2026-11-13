@@ -1,3 +1,3 @@
-# freelancer role bucket
+# Freelancer role
 
-Placeholder. The app has no `freelancer` auth role (roles are emp / admin / superadmin); see REFACTOR-NOTES.md.
+Freelancers authenticate through the employee account type and are classified by worker type. Role-specific home entry points live in `pages/`; common employee modules are reused with freelancer access rules from `src/data/roleNav.js`.

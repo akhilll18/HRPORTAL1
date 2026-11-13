@@ -8,6 +8,7 @@ const PERM_TEXT = { approve: "Approve / reject", bulk: "Bulk actions", reassign:
 
 export default function AdminProfile() {
   const { user, orgBy, scopeUnits, data } = useStore();
+  const adminRole = user.modules.includes("payroll") ? "Finance Admin" : "HR Admin";
   const scope = scopeUnits(user);
   const decided = data.requests.filter((r) => (r.steps || []).some((st) => st.approver === user.admin_code && st.status !== "pending"));
   return (
@@ -22,7 +23,7 @@ export default function AdminProfile() {
                 {user.full_name}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Admin · {user.email}
+                {adminRole} · {user.email}
               </Typography>
               <Stack direction="row" spacing={1} sx={{ alignItems: "center", mt: 1 }}>
                 <Mono>{user.admin_code}</Mono>
